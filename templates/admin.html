@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin - Student Results</title>
+</head>
+<body style="text-align:center; margin-top:50px;">
+    <h2>All Student Results</h2>
+    <table border="1" style="margin:auto;">
+        <tr>
+            <th>Username</th>
+            <th>Score</th>
+        </tr>
+        {{range .}}
+        <tr>
+            <td>{{.Username}}</td>
+            <td>{{.Score}}</td>
+        </tr>
+        {{end}}
+    </table>
+</body>
+</html>

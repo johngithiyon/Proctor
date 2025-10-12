@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Available Exams</title>
+    <style>
+        body { font-family: Arial; text-align: center; margin-top: 50px; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin: 10px 0; }
+        a { text-decoration: none; padding: 10px 20px; background-color: #007BFF; color: white; border-radius: 5px; display: inline-block; }
+        a:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <h2>Welcome, {{.Username}}!</h2>
+    <p>Select an exam to start:</p>
+    <ul>
+        {{range .Exams}}
+        <li>
+            <a href="/proctor?user={{$.Username}}&exam={{.}}">{{.}}</a>
+        </li>
+        {{end}}
+    </ul>
+    <br>
+    <a href="/">Logout</a>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Proctor Mode Exam</title>
+</head>
+<body style="text-align:center; margin-top:50px;">
+    <h2>Proctor Mode Exam</h2>
+    <p>Student: <span id="student-name"></span></p>
+    <p>Exam: <span id="exam-name"></span></p>
+    <video id="video" width="400" height="300" autoplay></video>
+    <p id="status">Exam started...</p>
+
+    <script>
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+
+        // Get username and exam from URL
+        const params = new URLSearchParams(window.location.search);
+        const username = params.get('user');
+        const exam = params.get('exam');
+        document.getElementById('student-name').innerText = username;
+        document.getElementById('exam-name').innerText = exam;
+
+        // Access webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => console.error(err));
+
+        // Capture image every 10 seconds for proctoring
+        setInterval(() => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const dataURL = canvas.toDataURL('image/png');
+
+            fetch('/capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `image=${encodeURIComponent(dataURL)}&username=${encodeURIComponent(username)}`
+            })
+            .then(res => res.text())
+            .then(resp => {
+                if(resp === 'TERMINATE'){
+                    status.innerText = "Face mismatch detected! Exam terminated!";
+                    video.pause();
+                    alert("Exam terminated due to face mismatch!");
+                    window.location.href = "/";
+                }
+            })
+            .catch(err => console.error(err));
+        }, 10000);
+    </script>
+
+    <p>Answer your MCQs below:</p>
+    <form id="mcq-form">
+        <div>
+            <p>1. Which of the following is a type of supervised learning?</p>
+            <input type="radio" name="q1" value="a"> a) K-Means Clustering<br>
+            <input type="radio" name="q1" value="b"> b) Linear Regression<br>
+            <input type="radio" name="q1" value="c"> c) PCA<br>
+            <input type="radio" name="q1" value="d"> d) Apriori Algorithm<br>
+        </div>
+
+        <div>
+            <p>2. Which activation function is commonly used in deep learning?</p>
+            <input type="radio" name="q2" value="a"> a) ReLU<br>
+            <input type="radio" name="q2" value="b"> b) Linear<br>
+            <input type="radio" name="q2" value="c"> c) Sigmoid<br>
+            <input type="radio" name="q2" value="d"> d) Both a and c<br>
+        </div>
+
+        <div>
+            <p>3. Which algorithm is used for classification problems?</p>
+            <input type="radio" name="q3" value="a"> a) Decision Tree<br>
+            <input type="radio" name="q3" value="b"> b) K-Means<br>
+            <input type="radio" name="q3" value="c"> c) PCA<br>
+            <input type="radio" name="q3" value="d"> d) Apriori<br>
+        </div>
+
+        <div>
+            <p>4. What does “AI” stand for?</p>
+            <input type="radio" name="q4" value="a"> a) Automated Interface<br>
+            <input type="radio" name="q4" value="b"> b) Artificial Intelligence<br>
+            <input type="radio" name="q4" value="c"> c) Algorithmic Integration<br>
+            <input type="radio" name="q4" value="d"> d) Automatic Instruction<br>
+        </div>
+
+        <div>
+            <p>5. Which of the following is a type of reinforcement learning?</p>
+            <input type="radio" name="q5" value="a"> a) Q-Learning<br>
+            <input type="radio" name="q5" value="b"> b) Linear Regression<br>
+            <input type="radio" name="q5" value="c"> c) KNN<br>
+            <input type="radio" name="q5" value="d"> d) PCA<br>
+        </div>
+
+        <br>
+        <button type="button" onclick="submitMCQ()">Submit Answers</button>
+    </form>
+
+    <script>
+        function submitMCQ() {
+            const form = document.getElementById('mcq-form');
+            const formData = new FormData(form);
+
+            const answers = {
+                q1: 'b',
+                q2: 'd',
+                q3: 'a',
+                q4: 'b',
+                q5: 'a'
+            };
+
+            let score = 0;
+            for (let [q, a] of Object.entries(answers)) {
+                if (formData.get(q) === a) score++;
+            }
+
+            // Send score + username to backend
+            fetch('/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(username)}&score=${score}`
+            })
+            .then(res => res.text())
+            .then(resp => {
+                // Redirect to student score page
+                window.location.href = `/score?user=${encodeURIComponent(username)}`;
+            })
+            .catch(err => console.error(err));
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+    <style>
+        body { font-family: Arial; text-align: center; margin-top: 80px; }
+        form { display: inline-block; padding: 30px; border: 1px solid #ccc; border-radius: 10px; }
+        input, select { padding: 10px; margin: 5px; width: 200px; }
+        button { padding: 10px 20px; cursor: pointer; background-color: #007BFF; color: white; border: none; border-radius: 5px; }
+        .error { color: red; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Login Page</h2>
+    <form action="/login" method="POST">
+        <input type="text" name="username" placeholder="Username" required><br>
+        <input type="password" name="password" placeholder="Password" required><br>
+        <select name="role">
+            <option value="student">Student</option>
+            <option value="admin">Admin</option>
+        </select><br>
+        <button type="submit">Login</button>
+        {{if .}}<div class="error">{{.}}</div>{{end}}
+    </form>
+</body>
+</html>
