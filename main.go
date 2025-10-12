@@ -7,44 +7,37 @@ import (
     "net/http"
     "net/url"
     "os"
+    "strings"
     "sync"
 )
 
 var templates = template.Must(template.ParseGlob("templates/*.html"))
 
-// Hardcoded student and admin credentials
+// ... (studentUser, adminUser, exams, Result, Violation structs remain the same) ...
 var studentUser = map[string]string{
     "student1": "1234",
 }
 var adminUser = map[string]string{
     "admin": "admin123",
 }
-
-// Hardcoded exams
 var exams = []string{
     "Math Exam - Grade 10",
     "Science Exam - Grade 10",
 }
-
-// Store student results
 type Result struct {
     Username string
     Score    int
 }
-
-// Store violation counts for each student
 type Violation struct {
     Username string
     Count    int
 }
-
 var results []Result
 var violations []Violation
 var mu sync.Mutex
 
 func main() {
     os.MkdirAll("captured_images", os.ModePerm)
-
     http.HandleFunc("/", loginPage)
     http.HandleFunc("/login", loginHandler)
     http.HandleFunc("/exam", examPage)
@@ -53,10 +46,11 @@ func main() {
     http.HandleFunc("/submit", submitHandler)
     http.HandleFunc("/score", scorePage)
     http.HandleFunc("/admin", adminPage)
-
     fmt.Println("Server running on http://localhost:8080")
     http.ListenAndServe(":8080", nil)
 }
+
+// ... (loginPage, loginHandler, examPage, proctorPage, submitHandler, scorePage, adminPage remain the same)...
 
 // Render login page
 func loginPage(w http.ResponseWriter, r *http.Request) {
@@ -125,10 +119,16 @@ func captureHandler(w http.ResponseWriter, r *http.Request) {
     defer resp.Body.Close()
     body, _ := ioutil.ReadAll(resp.Body)
     
-    // Check if response is a violation
     responseStr := string(body)
-    if responseStr == "NOISE_VIOLATION" {
-        // Increment violation count
+    
+    // Handle specific termination messages
+    if responseStr == "FACE_MISMATCH" {
+        w.Write([]byte("FACE_MISMATCH"))
+        return
+    }
+
+    // Handle violations
+    if strings.Contains(responseStr, "_VIOLATION") {
         mu.Lock()
         found := false
         for i, v := range violations {
@@ -136,29 +136,28 @@ func captureHandler(w http.ResponseWriter, r *http.Request) {
                 violations[i].Count++
                 found = true
                 
-                // Check if student has reached 10 violations
                 if violations[i].Count >= 10 {
                     mu.Unlock()
-                    w.Write([]byte("MAX_VIOLATIONS")) // Changed from "TERMINATE" to "MAX_VIOLATIONS"
+                    w.Write([]byte("MAX_VIOLATIONS"))
                     return
                 }
                 
-                // Return violation count to frontend
-                w.Write([]byte(fmt.Sprintf("VIOLATION:%d", violations[i].Count)))
+                // Send a more specific violation message to the frontend
+                w.Write([]byte(fmt.Sprintf("VIOLATION:%s:%d", responseStr, violations[i].Count)))
                 mu.Unlock()
                 return
             }
         }
         
-        // If this is the first violation for this student
         if !found {
             violations = append(violations, Violation{Username: username, Count: 1})
-            w.Write([]byte("VIOLATION:1"))
+            w.Write([]byte(fmt.Sprintf("VIOLATION:%s:1", responseStr)))
         }
         mu.Unlock()
         return
     }
     
+    // Pass through any other response (like "OK")
     w.Write(body)
 }
 
@@ -203,7 +202,6 @@ func adminPage(w http.ResponseWriter, r *http.Request) {
     mu.Lock()
     defer mu.Unlock()
     
-    // Combine results and violations for admin view
     type AdminData struct {
         Results    []Result
         Violations []Violation

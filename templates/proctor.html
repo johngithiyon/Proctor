@@ -36,7 +36,7 @@
     <p>Student: <span id="student-name"></span></p>
     <p>Exam: <span id="exam-name"></span></p>
     <video id="video" width="400" height="300" autoplay></video>
-    <p id="status">Exam started... Maintaining silence is required.</p>
+    <p id="status">Exam started... Please maintain silence and look at the screen.</p>
     
     <div id="violation-count">
         Violations: <span id="count">0</span><span class="violation-badge" id="badge" style="display: none;">!</span>
@@ -48,7 +48,6 @@
         const violationCount = document.getElementById('count');
         const violationBadge = document.getElementById('badge');
 
-        // Get username and exam from URL
         const params = new URLSearchParams(window.location.search);
         const username = params.get('user');
         const exam = params.get('exam');
@@ -61,20 +60,15 @@
         let javascriptNode;
         let isNoiseViolation = false;
 
-        // Access webcam and microphone
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
                 video.srcObject = stream;
-
-                // --- Audio Analysis Setup ---
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 microphone = audioContext.createMediaStreamSource(stream);
                 javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
-
                 analyser.smoothingTimeConstant = 0.8;
                 analyser.fftSize = 1024;
-
                 microphone.connect(analyser);
                 analyser.connect(javascriptNode);
                 javascriptNode.connect(audioContext.destination);
@@ -83,17 +77,11 @@
                     const array = new Uint8Array(analyser.frequencyBinCount);
                     analyser.getByteFrequencyData(array);
                     let values = 0;
-
                     const length = array.length;
                     for (let i = 0; i < length; i++) {
                         values += array[i];
                     }
-
                     const average = values / length;
-                    
-                    // --- Noise Threshold ---
-                    // This threshold might need tuning based on environment.
-                    // 30 is a good starting point for detecting talking.
                     if (average > 30) {
                         isNoiseViolation = true;
                     } else {
@@ -106,7 +94,6 @@
                 status.innerText = "Error: Could not access camera or microphone.";
             });
 
-        // Capture image every 10 seconds for proctoring
         setInterval(() => {
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
@@ -126,25 +113,34 @@
                     video.pause();
                     alert("Face mismatch detected. The exam will be terminated.");
                     window.location.href = "/";
-                } else if(resp === 'MAX_VIOLATIONS'){ // Added handling for MAX_VIOLATIONS
+                } else if(resp === 'MAX_VIOLATIONS'){
                     status.innerText = "Maximum Violations Reached Exam Terminated!";
                     video.pause();
                     alert("The maximum violations reached. Exam terminated.");
                     window.location.href = "/";
                 } else if(resp.startsWith('VIOLATION:')) {
-                    // Extract violation count from response
-                    const count = parseInt(resp.split(':')[1]);
+                    const respParts = resp.split(':');
+                    const violationType = respParts[1];
+                    const count = parseInt(respParts[2]);
+                    
                     violationCount.innerText = count;
                     violationBadge.style.display = 'inline-block';
-                    status.innerText = `Violation ${count}: Excessive noise detected! Please remain silent.`;
                     
-                    // Flash the violation badge
+                    let statusMessage = `Violation ${count}: `;
+                    if (violationType === 'NOISE_VIOLATION') {
+                        statusMessage += "Excessive noise detected! Please remain silent.";
+                    } else if (violationType === 'GAZE_VIOLATION') {
+                        statusMessage += "Gaze violation! Please look at the screen.";
+                    } else {
+                        statusMessage += "Proctoring violation detected!";
+                    }
+                    status.innerText = statusMessage;
+                    
                     violationBadge.style.animation = 'none';
                     setTimeout(() => {
                         violationBadge.style.animation = 'blink 1s linear infinite';
                     }, 10);
                 } else {
-                    // If no violation is returned from backend, ensure status is neutral
                     if (!status.innerText.includes("Violation")) {
                        status.innerText = "Exam in progress...";
                     }
@@ -199,16 +195,11 @@
         function submitMCQ() {
             const form = document.getElementById('mcq-form');
             const formData = new FormData(form);
-
-            const answers = {
-                q1: 'b', q2: 'd', q3: 'a', q4: 'b', q5: 'a'
-            };
-
+            const answers = { q1: 'b', q2: 'd', q3: 'a', q4: 'b', q5: 'a' };
             let score = 0;
             for (let [q, a] of Object.entries(answers)) {
                 if (formData.get(q) === a) score++;
             }
-
             fetch('/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

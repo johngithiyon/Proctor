@@ -4,9 +4,25 @@ import numpy as np
 import base64
 import os
 import time
+import mediapipe as mp
 
 app = Flask(__name__)
 
+# --- MediaPipe Setup ---
+mp_face_mesh = mp.solutions.face_mesh
+# Using refined landmarks around the eyes for better accuracy
+LEFT_EYE_INDICES = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+RIGHT_EYE_INDICES = [362, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382]
+# Iris center landmarks
+LEFT_IRIS_CENTER = 468
+RIGHT_IRIS_CENTER = 473
+
+# --- Gaze Detection Thresholds ---
+# These values might need tuning based on camera angle and distance.
+# A value of 0.5 means the iris is perfectly centered horizontally.
+HORIZONTAL_THRESHOLD = 0.35 # If iris is less than 35% from the left or more than 65% from the left, it's a violation.
+
+# --- Existing Setup ---
 os.makedirs("captured_images", exist_ok=True)
 reference_face_path = None
 
@@ -35,6 +51,52 @@ def compare_faces(ref_path, curr_path):
 
     return max_val >= 0.6
 
+def get_gaze_ratio(landmarks, eye_indices, iris_index):
+    try:
+        # Get eye corner coordinates
+        eye_left_corner = landmarks[eye_indices[0]]
+        eye_right_corner = landmarks[eye_indices[8]]
+        # Get iris center coordinates
+        iris = landmarks[iris_index]
+
+        # Calculate horizontal gaze ratio
+        eye_width = eye_right_corner.x - eye_left_corner.x
+        if eye_width == 0:
+            return 0.5 # Avoid division by zero, assume center
+        
+        gaze_ratio = (iris.x - eye_left_corner.x) / eye_width
+        return gaze_ratio
+    except IndexError:
+        return 0.5 # Return center if landmarks are not found
+
+def detect_gaze(image):
+    with mp_face_mesh.FaceMesh(
+        max_num_faces=1,
+        refine_landmarks=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    ) as face_mesh:
+        # Convert the BGR image to RGB
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(rgb_image)
+
+        if results.multi_face_landmarks:
+            landmarks = results.multi_face_landmarks[0].landmark
+            
+            # Calculate gaze ratio for both eyes
+            left_gaze_ratio = get_gaze_ratio(landmarks, LEFT_EYE_INDICES, LEFT_IRIS_CENTER)
+            right_gaze_ratio = get_gaze_ratio(landmarks, RIGHT_EYE_INDICES, RIGHT_IRIS_CENTER)
+            
+            # Average the gaze ratio for more stability
+            avg_gaze_ratio = (left_gaze_ratio + right_gaze_ratio) / 2
+            
+            # Check if gaze is off-center
+            if avg_gaze_ratio < HORIZONTAL_THRESHOLD or avg_gaze_ratio > (1 - HORIZONTAL_THRESHOLD):
+                return False # Gaze violation
+            else:
+                return True # Gaze is OK
+        return True # No face detected, assume OK to avoid false positives
+
 @app.route("/capture", methods=["POST"])
 def capture():
     global reference_face_path
@@ -54,12 +116,16 @@ def capture():
     if not compare_faces(reference_face_path, curr_path):
         return "FACE_MISMATCH"
 
-    # 2. Then, check for noise violation
-    # The frontend sends "true" or "false" as a string
+    # 2. Check for gaze violation
+    image = cv2.imread(curr_path)
+    if not detect_gaze(image):
+        return "GAZE_VIOLATION"
+
+    # 3. Then, check for noise violation
     if noise_violation == "true":
         return "NOISE_VIOLATION"
 
-    # If both checks pass
+    # If all checks pass
     return "OK"
 
 if __name__ == "__main__":
