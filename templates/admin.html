@@ -1,21 +1,70 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Admin - Student Results</title>
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .logout-btn { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; cursor: pointer; }
+        .logout-btn:hover { background-color: #45a049; }
+        .section { margin-top: 30px; }
+        .violation-high { color: red; font-weight: bold; }
+    </style>
 </head>
-<body style="text-align:center; margin-top:50px;">
-    <h2>All Student Results</h2>
-    <table border="1" style="margin:auto;">
-        <tr>
-            <th>Username</th>
-            <th>Score</th>
-        </tr>
-        {{range .}}
-        <tr>
-            <td>{{.Username}}</td>
-            <td>{{.Score}}</td>
-        </tr>
-        {{end}}
-    </table>
+<body>
+    <h1>Admin Dashboard</h1>
+    <a href="/"><button class="logout-btn">Logout</button></a>
+
+    <div class="section">
+        <h2>Student Results</h2>
+        <table>
+            <tr>
+                <th>Username</th>
+                <th>Score</th>
+            </tr>
+            {{range .Results}}
+            <tr>
+                <td>{{.Username}}</td>
+                <td>{{.Score}}</td>
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="2">No results available</td>
+            </tr>
+            {{end}}
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Student Violations</h2>
+        <table>
+            <tr>
+                <th>Username</th>
+                <th>Violation Count</th>
+                <th>Status</th>
+            </tr>
+            {{range .Violations}}
+            <tr>
+                <td>{{.Username}}</td>
+                <td>{{.Count}}</td>
+                <td>
+                    {{if ge .Count 10}}
+                        <span class="violation-high">Terminated</span>
+                    {{else}}
+                        Active
+                    {{end}}
+                </td>
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="3">No violations recorded</td>
+            </tr>
+            {{end}}
+        </table>
+    </div>
 </body>
 </html>

@@ -39,6 +39,9 @@ def compare_faces(ref_path, curr_path):
 def capture():
     global reference_face_path
     img_data = request.form.get("image")
+    username = request.form.get("username")
+    noise_violation = request.form.get("noise_violation")
+
     if not img_data:
         return "ERROR", 400
 
@@ -47,9 +50,16 @@ def capture():
         reference_face_path = curr_path
         return "OK"
 
+    # 1. Check for face mismatch first
     if not compare_faces(reference_face_path, curr_path):
-        return "TERMINATE"
+        return "FACE_MISMATCH"
 
+    # 2. Then, check for noise violation
+    # The frontend sends "true" or "false" as a string
+    if noise_violation == "true":
+        return "NOISE_VIOLATION"
+
+    # If both checks pass
     return "OK"
 
 if __name__ == "__main__":
