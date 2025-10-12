@@ -126,6 +126,11 @@
                     video.pause();
                     alert("Face mismatch detected. The exam will be terminated.");
                     window.location.href = "/";
+                } else if(resp === 'MAX_VIOLATIONS'){ // Added handling for MAX_VIOLATIONS
+                    status.innerText = "Maximum Violations Reached Exam Terminated!";
+                    video.pause();
+                    alert("The maximum violations reached. Exam terminated.");
+                    window.location.href = "/";
                 } else if(resp.startsWith('VIOLATION:')) {
                     // Extract violation count from response
                     const count = parseInt(resp.split(':')[1]);

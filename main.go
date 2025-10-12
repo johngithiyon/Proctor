@@ -139,7 +139,7 @@ func captureHandler(w http.ResponseWriter, r *http.Request) {
                 // Check if student has reached 10 violations
                 if violations[i].Count >= 10 {
                     mu.Unlock()
-                    w.Write([]byte("TERMINATE"))
+                    w.Write([]byte("MAX_VIOLATIONS")) // Changed from "TERMINATE" to "MAX_VIOLATIONS"
                     return
                 }
                 
