@@ -13,6 +13,20 @@
         .success { color: green; margin-top: 10px; }
         .camera-status { margin: 10px 0; font-weight: bold; }
         .hidden { display: none; }
+        .validating { color: orange; margin-top: 10px; }
+        .face-detection-status {
+            margin: 10px 0;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .face-detected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .face-not-detected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
     </style>
 </head>
 <body>
@@ -34,7 +48,9 @@
                 <div class="camera-status" id="camera-status">Initializing camera...</div>
                 <button type="button" id="capture-btn" disabled>Capture Photo</button>
                 <div id="photo-preview"></div>
+                <div id="face-detection-status" class="face-detection-status hidden"></div>
                 <input type="hidden" id="face-image" name="face_image">
+                <input type="hidden" id="face-validated" name="face_validated" value="false">
             </div>
             
             <button type="submit" id="login-btn" disabled>Login</button>
@@ -50,10 +66,13 @@
         const cameraStatus = document.getElementById('camera-status');
         const photoPreview = document.getElementById('photo-preview');
         const faceImageInput = document.getElementById('face-image');
+        const faceValidatedInput = document.getElementById('face-validated');
+        const faceDetectionStatus = document.getElementById('face-detection-status');
         const loginForm = document.getElementById('login-form');
         
         let stream = null;
         let photoCaptured = false;
+        let faceValidated = false;
 
         // Initialize camera
         async function initCamera() {
@@ -66,6 +85,47 @@
                 console.error("Error accessing camera:", err);
                 cameraStatus.textContent = "Error: Could not access camera. Please check permissions.";
                 cameraStatus.classList.add('error');
+            }
+        }
+
+        // Validate face in the captured image
+        async function validateFace(dataURL) {
+            faceDetectionStatus.textContent = "Validating face... Please wait.";
+            faceDetectionStatus.classList.remove('hidden', 'face-detected', 'face-not-detected');
+            faceDetectionStatus.classList.add('validating');
+            
+            try {
+                const response = await fetch('/validate-face', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `image=${encodeURIComponent(dataURL)}`
+                });
+                
+                const result = await response.text();
+                
+                if (result === 'FACE_DETECTED') {
+                    faceDetectionStatus.textContent = "Face detected successfully!";
+                    faceDetectionStatus.classList.remove('validating', 'face-not-detected');
+                    faceDetectionStatus.classList.add('face-detected');
+                    faceValidated = true;
+                    faceValidatedInput.value = "true";
+                    loginBtn.disabled = false;
+                } else {
+                    faceDetectionStatus.textContent = "No face detected. Please try again with your face clearly visible.";
+                    faceDetectionStatus.classList.remove('validating', 'face-detected');
+                    faceDetectionStatus.classList.add('face-not-detected');
+                    faceValidated = false;
+                    faceValidatedInput.value = "false";
+                    loginBtn.disabled = true;
+                }
+            } catch (err) {
+                console.error('Error validating face:', err);
+                faceDetectionStatus.textContent = "Error validating face. Please try again.";
+                faceDetectionStatus.classList.remove('validating', 'face-detected');
+                faceDetectionStatus.classList.add('face-not-detected');
+                faceValidated = false;
+                faceValidatedInput.value = "false";
+                loginBtn.disabled = true;
             }
         }
 
@@ -91,21 +151,44 @@
             photoPreview.appendChild(img);
             
             const status = document.createElement('div');
-            status.textContent = 'Photo captured successfully!';
-            status.classList.add('success');
+            status.textContent = 'Photo captured! Validating face...';
+            status.classList.add('validating');
             photoPreview.appendChild(status);
             
             photoCaptured = true;
-            loginBtn.disabled = false;
             captureBtn.disabled = true;
+            
+            // Validate face
+            validateFace(dataURL);
         });
+
+        // Retake photo
+        function retakePhoto() {
+            photoCaptured = false;
+            faceValidated = false;
+            faceValidatedInput.value = "false";
+            loginBtn.disabled = true;
+            captureBtn.disabled = false;
+            photoPreview.innerHTML = '';
+            faceDetectionStatus.classList.add('hidden');
+        }
+
+        // Add retake button after photo is captured
+        function addRetakeButton() {
+            const retakeBtn = document.createElement('button');
+            retakeBtn.textContent = 'Retake Photo';
+            retakeBtn.type = 'button';
+            retakeBtn.style.marginTop = '10px';
+            retakeBtn.addEventListener('click', retakePhoto);
+            photoPreview.appendChild(retakeBtn);
+        }
 
         // Form submission
         loginForm.addEventListener('submit', function(e) {
-            if (!photoCaptured) {
+            if (!photoCaptured || !faceValidated) {
                 e.preventDefault();
                 const error = document.createElement('div');
-                error.textContent = 'Please capture your photo before logging in.';
+                error.textContent = 'Please capture and validate your face photo before logging in.';
                 error.classList.add('error');
                 loginForm.appendChild(error);
                 return false;

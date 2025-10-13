@@ -221,6 +221,44 @@ def detect_airpods_headsets(image):
         print(f"Error in airpods/headset detection: {e}")
         return None
 
+def detect_face(image):
+    """
+    Detect if there is a face in the image
+    Returns True if a face is detected, otherwise False
+    """
+    with mp_face_mesh.FaceMesh(
+        max_num_faces=1,
+        refine_landmarks=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    ) as face_mesh:
+        # Convert the BGR image to RGB
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(rgb_image)
+
+        # Check if a face is detected
+        if results.multi_face_landmarks:
+            return True
+        return False
+
+@app.route("/validate-face", methods=["POST"])
+def validate_face():
+    img_data = request.form.get("image")
+    
+    if not img_data:
+        return "ERROR", 400
+
+    curr_path = save_image_from_base64(img_data)
+    
+    # Load the image for analysis
+    image = cv2.imread(curr_path)
+    
+    # Check if a face is detected
+    if detect_face(image):
+        return "FACE_DETECTED"
+    else:
+        return "NO_FACE_DETECTED"
+
 @app.route("/capture", methods=["POST"])
 def capture():
     img_data = request.form.get("image")

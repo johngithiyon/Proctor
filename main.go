@@ -55,6 +55,7 @@ func main() {
     http.HandleFunc("/fullscreen-violation", fullscreenViolationHandler)
     http.HandleFunc("/tab-change-violation", tabChangeViolationHandler)
     http.HandleFunc("/window-change-violation", windowChangeViolationHandler)
+    http.HandleFunc("/validate-face", validateFaceHandler)
     fmt.Println("Server running on http://localhost:8080")
     http.ListenAndServe(":8080", nil)
 }
@@ -123,6 +124,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
     password := r.FormValue("password")
     role := r.FormValue("role")
     faceImage := r.FormValue("face_image")
+    faceValidated := r.FormValue("face_validated")
 
     // Validate credentials
     if role == "student" {
@@ -137,6 +139,12 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
         }
         // Admin doesn't need face verification
         http.Redirect(w, r, "/admin", http.StatusSeeOther)
+        return
+    }
+
+    // Check if face was validated
+    if faceValidated != "true" {
+        templates.ExecuteTemplate(w, "login.html", "Face validation failed. Please try again.")
         return
     }
 
@@ -172,6 +180,41 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
         http.Redirect(w, r, "/exam?user="+username, http.StatusSeeOther)
     } else {
         templates.ExecuteTemplate(w, "login.html", "Please capture your face photo!")
+    }
+}
+
+// Validate face in the captured image
+func validateFaceHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != "POST" {
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
+
+    imgData := r.FormValue("image")
+    if imgData == "" {
+        w.WriteHeader(http.StatusBadRequest)
+        w.Write([]byte("ERROR: No image provided"))
+        return
+    }
+
+    // Forward the image to the Python service for face validation
+    resp, err := http.PostForm("http://localhost:5000/validate-face", url.Values{
+        "image": {imgData},
+    })
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        w.Write([]byte("ERROR"))
+        return
+    }
+    defer resp.Body.Close()
+    
+    body, _ := ioutil.ReadAll(resp.Body)
+    responseStr := string(body)
+    
+    if responseStr == "FACE_DETECTED" {
+        w.Write([]byte("FACE_DETECTED"))
+    } else {
+        w.Write([]byte("NO_FACE_DETECTED"))
     }
 }
 
