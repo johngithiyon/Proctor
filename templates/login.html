@@ -4,23 +4,116 @@
     <title>Login</title>
     <style>
         body { font-family: Arial; text-align: center; margin-top: 80px; }
-        form { display: inline-block; padding: 30px; border: 1px solid #ccc; border-radius: 10px; }
+        .login-container { display: inline-block; padding: 30px; border: 1px solid #ccc; border-radius: 10px; }
+        .camera-section { margin: 20px 0; }
+        #login-video { width: 320px; height: 240px; border: 1px solid #ccc; border-radius: 5px; }
         input, select { padding: 10px; margin: 5px; width: 200px; }
-        button { padding: 10px 20px; cursor: pointer; background-color: #007BFF; color: white; border: none; border-radius: 5px; }
+        button { padding: 10px 20px; cursor: pointer; background-color: #007BFF; color: white; border: none; border-radius: 5px; margin: 5px; }
         .error { color: red; margin-top: 10px; }
+        .success { color: green; margin-top: 10px; }
+        .camera-status { margin: 10px 0; font-weight: bold; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <h2>Login Page</h2>
-    <form action="/login" method="POST">
-        <input type="text" name="username" placeholder="Username" required><br>
-        <input type="password" name="password" placeholder="Password" required><br>
-        <select name="role">
-            <option value="student">Student</option>
-            <option value="admin">Admin</option>
-        </select><br>
-        <button type="submit">Login</button>
-        {{if .}}<div class="error">{{.}}</div>{{end}}
-    </form>
+    <div class="login-container">
+        <form id="login-form" action="/login" method="POST">
+            <input type="text" name="username" placeholder="Username" required><br>
+            <input type="password" name="password" placeholder="Password" required><br>
+            <select name="role">
+                <option value="student">Student</option>
+                <option value="admin">Admin</option>
+            </select><br>
+            
+            <div class="camera-section">
+                <h3>Face Verification</h3>
+                <p>Please position your face in the camera and click "Capture Photo"</p>
+                <video id="login-video" autoplay></video>
+                <canvas id="login-canvas" class="hidden"></canvas>
+                <div class="camera-status" id="camera-status">Initializing camera...</div>
+                <button type="button" id="capture-btn" disabled>Capture Photo</button>
+                <div id="photo-preview"></div>
+                <input type="hidden" id="face-image" name="face_image">
+            </div>
+            
+            <button type="submit" id="login-btn" disabled>Login</button>
+            {{if .}}<div class="error">{{.}}</div>{{end}}
+        </form>
+    </div>
+
+    <script>
+        const video = document.getElementById('login-video');
+        const canvas = document.getElementById('login-canvas');
+        const captureBtn = document.getElementById('capture-btn');
+        const loginBtn = document.getElementById('login-btn');
+        const cameraStatus = document.getElementById('camera-status');
+        const photoPreview = document.getElementById('photo-preview');
+        const faceImageInput = document.getElementById('face-image');
+        const loginForm = document.getElementById('login-form');
+        
+        let stream = null;
+        let photoCaptured = false;
+
+        // Initialize camera
+        async function initCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                cameraStatus.textContent = "Camera ready. Please capture your photo.";
+                captureBtn.disabled = false;
+            } catch (err) {
+                console.error("Error accessing camera:", err);
+                cameraStatus.textContent = "Error: Could not access camera. Please check permissions.";
+                cameraStatus.classList.add('error');
+            }
+        }
+
+        // Capture photo
+        captureBtn.addEventListener('click', function() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0);
+            
+            const dataURL = canvas.toDataURL('image/jpeg');
+            faceImageInput.value = dataURL;
+            
+            // Show preview
+            const img = document.createElement('img');
+            img.src = dataURL;
+            img.width = 160;
+            img.height = 120;
+            img.style.border = '1px solid #ccc';
+            img.style.borderRadius = '5px';
+            
+            photoPreview.innerHTML = '';
+            photoPreview.appendChild(img);
+            
+            const status = document.createElement('div');
+            status.textContent = 'Photo captured successfully!';
+            status.classList.add('success');
+            photoPreview.appendChild(status);
+            
+            photoCaptured = true;
+            loginBtn.disabled = false;
+            captureBtn.disabled = true;
+        });
+
+        // Form submission
+        loginForm.addEventListener('submit', function(e) {
+            if (!photoCaptured) {
+                e.preventDefault();
+                const error = document.createElement('div');
+                error.textContent = 'Please capture your photo before logging in.';
+                error.classList.add('error');
+                loginForm.appendChild(error);
+                return false;
+            }
+        });
+
+        // Initialize camera on page load
+        window.addEventListener('load', initCamera);
+    </script>
 </body>
 </html>

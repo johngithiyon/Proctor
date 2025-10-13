@@ -40,7 +40,6 @@ PROHIBITED_ITEMS = {
 
 # --- Existing Setup ---
 os.makedirs("captured_images", exist_ok=True)
-reference_face_path = None
 
 def save_image_from_base64(data_url):
     parts = data_url.split(",")
@@ -224,10 +223,10 @@ def detect_airpods_headsets(image):
 
 @app.route("/capture", methods=["POST"])
 def capture():
-    global reference_face_path
     img_data = request.form.get("image")
     username = request.form.get("username")
     noise_violation = request.form.get("noise_violation")
+    reference_face_path = request.form.get("reference_face")
 
     if not img_data:
         return "ERROR", 400
@@ -241,14 +240,13 @@ def capture():
     if reference_face_path is None:
         if detect_multiple_faces(image):
             return "MULTIPLE_FACES"
-        reference_face_path = curr_path
         return "OK"
 
     # 1. Check for multiple faces first
     if detect_multiple_faces(image):
         return "MULTIPLE_FACES"
 
-    # 2. Check for face mismatch
+    # 2. Check for face mismatch with the reference face from login
     if not compare_faces(reference_face_path, curr_path):
         return "FACE_MISMATCH"
 

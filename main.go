@@ -9,8 +9,9 @@ import (
     "os"
     "strings"
     "sync"
+    "encoding/base64"
+    "path/filepath"
 )
-
 
 var templates = template.Must(template.ParseGlob("templates/*.html"))
 
@@ -37,8 +38,12 @@ var results []Result
 var violations []Violation
 var mu sync.Mutex
 
+// Store reference faces for each user
+var userReferenceFaces = make(map[string]string)
+
 func main() {
     os.MkdirAll("captured_images", os.ModePerm)
+    os.MkdirAll("reference_faces", os.ModePerm)
     http.HandleFunc("/", loginPage)
     http.HandleFunc("/login", loginHandler)
     http.HandleFunc("/exam", examPage)
@@ -112,20 +117,61 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
         http.Redirect(w, r, "/", http.StatusSeeOther)
         return
     }
+    
     username := r.FormValue("username")
     password := r.FormValue("password")
+    role := r.FormValue("role")
+    faceImage := r.FormValue("face_image")
 
-    if pass, ok := studentUser[username]; ok && pass == password {
-        http.Redirect(w, r, "/exam?user="+username, http.StatusSeeOther)
-        return
-    }
-
-    if pass, ok := adminUser[username]; ok && pass == password {
+    // Validate credentials
+    if role == "student" {
+        if pass, ok := studentUser[username]; !ok || pass != password {
+            templates.ExecuteTemplate(w, "login.html", "Invalid credentials!")
+            return
+        }
+    } else if role == "admin" {
+        if pass, ok := adminUser[username]; !ok || pass != password {
+            templates.ExecuteTemplate(w, "login.html", "Invalid credentials!")
+            return
+        }
+        // Admin doesn't need face verification
         http.Redirect(w, r, "/admin", http.StatusSeeOther)
         return
     }
 
-    templates.ExecuteTemplate(w, "login.html", "Invalid credentials!")
+    // Save face image for student
+    if faceImage != "" {
+        // Decode base64 image
+        parts := strings.Split(faceImage, ",")
+        if len(parts) != 2 {
+            templates.ExecuteTemplate(w, "login.html", "Invalid face image format!")
+            return
+        }
+        
+        decoded, err := base64.StdEncoding.DecodeString(parts[1])
+        if err != nil {
+            templates.ExecuteTemplate(w, "login.html", "Failed to process face image!")
+            return
+        }
+        
+        // Save reference face
+        referenceFacePath := filepath.Join("reference_faces", username+".jpg")
+        err = ioutil.WriteFile(referenceFacePath, decoded, 0644)
+        if err != nil {
+            templates.ExecuteTemplate(w, "login.html", "Failed to save face image!")
+            return
+        }
+        
+        // Store reference face path for this user
+        mu.Lock()
+        userReferenceFaces[username] = referenceFacePath
+        mu.Unlock()
+        
+        // Redirect to exam page
+        http.Redirect(w, r, "/exam?user="+username, http.StatusSeeOther)
+    } else {
+        templates.ExecuteTemplate(w, "login.html", "Please capture your face photo!")
+    }
 }
 
 // Forward captured data to Python OpenCV service
@@ -139,10 +185,22 @@ func captureHandler(w http.ResponseWriter, r *http.Request) {
     username := r.FormValue("username")
     noiseViolation := r.FormValue("noise_violation")
 
+    // Get reference face path for this user
+    mu.Lock()
+    referenceFacePath, exists := userReferenceFaces[username]
+    mu.Unlock()
+    
+    if !exists {
+        w.WriteHeader(http.StatusInternalServerError)
+        w.Write([]byte("ERROR: No reference face found for user"))
+        return
+    }
+
     resp, err := http.PostForm("http://localhost:5000/capture", url.Values{
         "image":           {imgData},
         "username":        {username},
         "noise_violation": {noiseViolation},
+        "reference_face":  {referenceFacePath},
     })
     if err != nil {
         w.WriteHeader(http.StatusInternalServerError)
