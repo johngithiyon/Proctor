@@ -11,9 +11,10 @@ import (
     "sync"
 )
 
+
 var templates = template.Must(template.ParseGlob("templates/*.html"))
 
-// ... (studentUser, adminUser, exams, Result, Violation structs remain the same) ...
+// --- User and Data Structures ---
 var studentUser = map[string]string{
     "student1": "1234",
 }
@@ -46,18 +47,66 @@ func main() {
     http.HandleFunc("/submit", submitHandler)
     http.HandleFunc("/score", scorePage)
     http.HandleFunc("/admin", adminPage)
+    http.HandleFunc("/fullscreen-violation", fullscreenViolationHandler)
+    http.HandleFunc("/tab-change-violation", tabChangeViolationHandler)
     fmt.Println("Server running on http://localhost:8080")
     http.ListenAndServe(":8080", nil)
 }
 
-// ... (loginPage, loginHandler, examPage, proctorPage, submitHandler, scorePage, adminPage remain the same)...
-
-// Render login page
+// --- Page Renderers ---
 func loginPage(w http.ResponseWriter, r *http.Request) {
     templates.ExecuteTemplate(w, "login.html", nil)
 }
 
-// Handle login
+func examPage(w http.ResponseWriter, r *http.Request) {
+    username := r.URL.Query().Get("user")
+    data := struct {
+        Username string
+        Exams    []string
+    }{username, exams}
+    templates.ExecuteTemplate(w, "exam.html", data)
+}
+
+func proctorPage(w http.ResponseWriter, r *http.Request) {
+    username := r.URL.Query().Get("user")
+    templates.ExecuteTemplate(w, "proctor.html", map[string]string{"Username": username})
+}
+
+func scorePage(w http.ResponseWriter, r *http.Request) {
+    username := r.URL.Query().Get("user")
+    var studentScore int
+    mu.Lock()
+    for _, res := range results {
+        if res.Username == username {
+            studentScore = res.Score
+            break
+        }
+    }
+    mu.Unlock()
+    templates.ExecuteTemplate(w, "score.html", struct {
+        Username string
+        Score    int
+    }{username, studentScore})
+}
+
+func adminPage(w http.ResponseWriter, r *http.Request) {
+    mu.Lock()
+    defer mu.Unlock()
+    
+    type AdminData struct {
+        Results    []Result
+        Violations []Violation
+    }
+    
+    data := AdminData{
+        Results:    results,
+        Violations: violations,
+    }
+    
+    templates.ExecuteTemplate(w, "admin.html", data)
+}
+
+// --- Handlers ---
 func loginHandler(w http.ResponseWriter, r *http.Request) {
     if r.Method != "POST" {
         http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -77,22 +126,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     templates.ExecuteTemplate(w, "login.html", "Invalid credentials!")
-}
-
-// Render exam selection page
-func examPage(w http.ResponseWriter, r *http.Request) {
-    username := r.URL.Query().Get("user")
-    data := struct {
-        Username string
-        Exams    []string
-    }{username, exams}
-    templates.ExecuteTemplate(w, "exam.html", data)
-}
-
-// Render proctor page with username
-func proctorPage(w http.ResponseWriter, r *http.Request) {
-    username := r.URL.Query().Get("user")
-    templates.ExecuteTemplate(w, "proctor.html", map[string]string{"Username": username})
 }
 
 // Forward captured data to Python OpenCV service
@@ -126,9 +159,16 @@ func captureHandler(w http.ResponseWriter, r *http.Request) {
         w.Write([]byte("FACE_MISMATCH"))
         return
     }
+    
+    // Handle multiple faces detection
+    if responseStr == "MULTIPLE_FACES" {
+        w.Write([]byte("MULTIPLE_FACES"))
+        return
+    }
 
-    // Handle violations
-    if strings.Contains(responseStr, "_VIOLATION") {
+    // Handle violations, including the new PROHIBITED_ITEM type
+    // The condition now checks for "_VIOLATION" (e.g., GAZE_VIOLATION) OR "PROHIBITED_ITEM"
+    if strings.Contains(responseStr, "_VIOLATION") || strings.Contains(responseStr, "PROHIBITED_ITEM") {
         mu.Lock()
         found := false
         for i, v := range violations {
@@ -143,6 +183,7 @@ func captureHandler(w http.ResponseWriter, r *http.Request) {
                 }
                 
                 // Send a more specific violation message to the frontend
+                // The responseStr could be "GAZE_VIOLATION" or "PROHIBITED_ITEM:MOBILE_PHONE"
                 w.Write([]byte(fmt.Sprintf("VIOLATION:%s:%d", responseStr, violations[i].Count)))
                 mu.Unlock()
                 return
@@ -161,7 +202,76 @@ func captureHandler(w http.ResponseWriter, r *http.Request) {
     w.Write(body)
 }
 
-// Handle exam submission
+// Handle fullscreen violation
+func fullscreenViolationHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != "POST" {
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
+
+    username := r.FormValue("username")
+    
+    mu.Lock()
+    found := false
+    for i, v := range violations {
+        if v.Username == username {
+            violations[i].Count++
+            found = true
+            
+            if violations[i].Count >= 10 {
+                mu.Unlock()
+                w.Write([]byte("MAX_VIOLATIONS"))
+                return
+            }
+            
+            w.Write([]byte(fmt.Sprintf("VIOLATION:FULLSCREEN_VIOLATION:%d", violations[i].Count)))
+            mu.Unlock()
+            return
+        }
+    }
+    
+    if !found {
+        violations = append(violations, Violation{Username: username, Count: 1})
+        w.Write([]byte(fmt.Sprintf("VIOLATION:FULLSCREEN_VIOLATION:1")))
+    }
+    mu.Unlock()
+}
+
+// Handle tab change violation
+func tabChangeViolationHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != "POST" {
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
+
+    username := r.FormValue("username")
+    
+    mu.Lock()
+    found := false
+    for i, v := range violations {
+        if v.Username == username {
+            violations[i].Count++
+            found = true
+            
+            if violations[i].Count >= 10 {
+                mu.Unlock()
+                w.Write([]byte("MAX_VIOLATIONS"))
+                return
+            }
+            
+            w.Write([]byte(fmt.Sprintf("VIOLATION:TAB_CHANGE_VIOLATION:%d", violations[i].Count)))
+            mu.Unlock()
+            return
+        }
+    }
+    
+    if !found {
+        violations = append(violations, Violation{Username: username, Count: 1})
+        w.Write([]byte(fmt.Sprintf("VIOLATION:TAB_CHANGE_VIOLATION:1")))
+    }
+    mu.Unlock()
+}
+
 func submitHandler(w http.ResponseWriter, r *http.Request) {
     if r.Method != "POST" {
         w.WriteHeader(http.StatusBadRequest)
@@ -179,38 +289,4 @@ func submitHandler(w http.ResponseWriter, r *http.Request) {
     mu.Unlock()
 
     http.Redirect(w, r, "/score?user="+username, http.StatusSeeOther)
-}
-
-// Render student score page
-func scorePage(w http.ResponseWriter, r *http.Request) {
-    username := r.URL.Query().Get("user")
-    var studentScore int
-    for _, res := range results {
-        if res.Username == username {
-            studentScore = res.Score
-            break
-        }
-    }
-    templates.ExecuteTemplate(w, "score.html", struct {
-        Username string
-        Score    int
-    }{username, studentScore})
-}
-
-// Render admin page with all results
-func adminPage(w http.ResponseWriter, r *http.Request) {
-    mu.Lock()
-    defer mu.Unlock()
-    
-    type AdminData struct {
-        Results    []Result
-        Violations []Violation
-    }
-    
-    data := AdminData{
-        Results:    results,
-        Violations: violations,
-    }
-    
-    templates.ExecuteTemplate(w, "admin.html", data)
 }

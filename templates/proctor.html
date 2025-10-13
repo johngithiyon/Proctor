@@ -3,7 +3,38 @@
 <head>
     <title>Proctor Mode Exam</title>
     <style>
-        body { font-family: sans-serif; text-align:center; margin-top:50px; }
+        body { 
+            font-family: sans-serif; 
+            text-align:center; 
+            margin-top:50px; 
+            overflow: hidden; /* Prevent scrolling when in fullscreen */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .header-section {
+            flex-shrink: 0;
+            padding: 10px;
+        }
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .video-section {
+            flex: 0 0 400px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .questions-section {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            text-align: left;
+            padding-bottom: 80px; /* Add padding to ensure submit button is always visible */
+        }
         #video { border: 2px solid #ccc; border-radius: 8px; }
         #status { font-weight: bold; margin-top: 10px; }
         .violation { color: red; animation: blink 1s linear infinite; }
@@ -17,6 +48,7 @@
             border-radius: 5px;
             padding: 10px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 100;
         }
         .violation-badge {
             display: inline-block;
@@ -29,17 +61,162 @@
             text-align: center;
             margin-left: 10px;
         }
+        .fullscreen-warning {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .fullscreen-warning h2 {
+            margin-bottom: 20px;
+        }
+        .fullscreen-warning button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .fullscreen-warning button:hover {
+            background-color: #45a049;
+        }
+        .question {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .question p {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .question-options {
+            margin-left: 20px;
+        }
+        .submit-section {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 15px;
+            text-align: center;
+            background-color: #f8f9fa;
+            border-top: 1px solid #ddd;
+            z-index: 100;
+        }
+        .submit-button {
+            padding: 12px 30px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .submit-button:hover {
+            background-color: #45a049;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .submit-instruction {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
-    <h2>Proctor Mode Exam</h2>
-    <p>Student: <span id="student-name"></span></p>
-    <p>Exam: <span id="exam-name"></span></p>
-    <video id="video" width="400" height="300" autoplay></video>
-    <p id="status">Exam started... Please maintain silence and look at the screen.</p>
+    <div class="header-section">
+        <h2>Proctor Mode Exam</h2>
+        <p>Student: <span id="student-name"></span></p>
+        <p>Exam: <span id="exam-name"></span></p>
+    </div>
+
+    <div class="main-content">
+        <div class="video-section">
+            <video id="video" width="400" height="300" autoplay></video>
+            <p id="status">Exam started... Please maintain silence and look at the screen.</p>
+        </div>
+
+        <div class="questions-section">
+            <h3>Answer your MCQs below:</h3>
+            <form id="mcq-form">
+                <div class="question">
+                    <p>1. Which of the following is a type of supervised learning?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q1" value="a"> a) K-Means Clustering<br>
+                        <input type="radio" name="q1" value="b"> b) Linear Regression<br>
+                        <input type="radio" name="q1" value="c"> c) PCA<br>
+                        <input type="radio" name="q1" value="d"> d) Apriori Algorithm<br>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>2. Which activation function is commonly used in deep learning?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q2" value="a"> a) ReLU<br>
+                        <input type="radio" name="q2" value="b"> b) Linear<br>
+                        <input type="radio" name="q2" value="c"> c) Sigmoid<br>
+                        <input type="radio" name="q2" value="d"> d) Both a and c<br>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>3. Which algorithm is used for classification problems?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q3" value="a"> a) Decision Tree<br>
+                        <input type="radio" name="q3" value="b"> b) K-Means<br>
+                        <input type="radio" name="q3" value="c"> c) PCA<br>
+                        <input type="radio" name="q3" value="d"> d) Apriori<br>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>4. What does "AI" stand for?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q4" value="a"> a) Automated Interface<br>
+                        <input type="radio" name="q4" value="b"> b) Artificial Intelligence<br>
+                        <input type="radio" name="q4" value="c"> c) Algorithmic Integration<br>
+                        <input type="radio" name="q4" value="d"> d) Automatic Instruction<br>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>5. Which of the following is a type of reinforcement learning?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q5" value="a"> a) Q-Learning<br>
+                        <input type="radio" name="q5" value="b"> b) Linear Regression<br>
+                        <input type="radio" name="q5" value="c"> c) KNN<br>
+                        <input type="radio" name="q5" value="d"> d) PCA<br>
+                    </div>
+                </div>
+            </form>
+            <div class="submit-instruction">
+                <p>Submit button is located at the bottom of the page</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="submit-section">
+        <button type="button" class="submit-button" onclick="submitMCQ()">Submit Answers</button>
+    </div>
     
     <div id="violation-count">
         Violations: <span id="count">0</span><span class="violation-badge" id="badge" style="display: none;">!</span>
+    </div>
+
+    <div id="fullscreen-warning" class="fullscreen-warning" style="display: none;">
+        <h2>Fullscreen Mode Required</h2>
+        <p>This exam must be taken in fullscreen mode. Please click the button below to enter fullscreen.</p>
+        <button onclick="enterFullscreen()">Enter Fullscreen</button>
     </div>
 
     <script>
@@ -47,6 +224,7 @@
         const status = document.getElementById('status');
         const violationCount = document.getElementById('count');
         const violationBadge = document.getElementById('badge');
+        const fullscreenWarning = document.getElementById('fullscreen-warning');
 
         const params = new URLSearchParams(window.location.search);
         const username = params.get('user');
@@ -59,6 +237,156 @@
         let microphone;
         let javascriptNode;
         let isNoiseViolation = false;
+        let isFullscreen = false;
+        let examSubmitted = false;
+        let tabChangeViolationCount = 0;
+        let fullscreenViolationCount = 0;
+
+        // Function to enter fullscreen
+        function enterFullscreen() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) { /* IE11 */
+                elem.msRequestFullscreen();
+            }
+            fullscreenWarning.style.display = 'none';
+            isFullscreen = true;
+        }
+
+        // Function to exit fullscreen
+        function exitFullscreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE11 */
+                document.msExitFullscreen();
+            }
+        }
+
+        // Listen for fullscreen changes
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        function handleFullscreenChange() {
+            const isCurrentlyFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || 
+                document.mozFullScreenElement || document.msFullscreenElement);
+            
+            if (!isCurrentlyFullscreen && isFullscreen && !examSubmitted) {
+                // User exited fullscreen mode
+                fullscreenViolationCount++;
+                reportFullscreenViolation();
+                
+                // Show warning
+                fullscreenWarning.style.display = 'flex';
+                isFullscreen = false;
+            } else if (isCurrentlyFullscreen) {
+                fullscreenWarning.style.display = 'none';
+                isFullscreen = true;
+            }
+        }
+
+        // Function to report fullscreen violation
+        function reportFullscreenViolation() {
+            fetch('/fullscreen-violation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(username)}`
+            })
+            .then(res => res.text())
+            .then(resp => {
+                if(resp.startsWith('VIOLATION:')) {
+                    const respParts = resp.split(':');
+                    const count = parseInt(respParts[respParts.length - 1]);
+                    
+                    violationCount.innerText = count;
+                    violationBadge.style.display = 'inline-block';
+                    
+                    status.innerText = `Violation ${count}: You exited fullscreen mode. Please return to fullscreen.`;
+                    status.classList.add('violation');
+                    
+                    violationBadge.style.animation = 'none';
+                    setTimeout(() => {
+                        violationBadge.style.animation = 'blink 1s linear infinite';
+                    }, 10);
+                    
+                    if (resp === 'MAX_VIOLATIONS') {
+                        status.innerText = "Maximum Violations Reached Exam Terminated!";
+                        video.pause();
+                        alert("The maximum violations reached. Exam terminated.");
+                        window.location.href = "/";
+                    }
+                }
+            })
+            .catch(err => console.error('Error reporting fullscreen violation:', err));
+        }
+
+        // Function to report tab change violation
+        function reportTabChangeViolation() {
+            if (examSubmitted) return;
+            
+            tabChangeViolationCount++;
+            fetch('/tab-change-violation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(username)}`
+            })
+            .then(res => res.text())
+            .then(resp => {
+                if(resp.startsWith('VIOLATION:')) {
+                    const respParts = resp.split(':');
+                    const count = parseInt(respParts[respParts.length - 1]);
+                    
+                    violationCount.innerText = count;
+                    violationBadge.style.display = 'inline-block';
+                    
+                    status.innerText = `Violation ${count}: Tab change detected! Please focus on the exam.`;
+                    status.classList.add('violation');
+                    
+                    violationBadge.style.animation = 'none';
+                    setTimeout(() => {
+                        violationBadge.style.animation = 'blink 1s linear infinite';
+                    }, 10);
+                    
+                    if (resp === 'MAX_VIOLATIONS') {
+                        status.innerText = "Maximum Violations Reached Exam Terminated!";
+                        video.pause();
+                        alert("The maximum violations reached. Exam terminated.");
+                        window.location.href = "/";
+                    }
+                }
+            })
+            .catch(err => console.error('Error reporting tab change violation:', err));
+        }
+
+        // Detect tab changes
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                reportTabChangeViolation();
+            }
+        });
+
+        // Prevent right-click
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            return false;
+        });
+
+        // Prevent keyboard shortcuts that might exit fullscreen
+        document.addEventListener('keydown', function(e) {
+            // F11, Esc (when in fullscreen), Alt+Tab
+            if (e.keyCode === 122 || 
+                (e.keyCode === 27 && isFullscreen) || 
+                (e.altKey && e.keyCode === 9)) {
+                e.preventDefault();
+                return false;
+            }
+        });
 
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
@@ -88,6 +416,13 @@
                         isNoiseViolation = false;
                     }
                 };
+                
+                // After getting camera access, prompt for fullscreen
+                setTimeout(() => {
+                    if (!isFullscreen) {
+                        fullscreenWarning.style.display = 'flex';
+                    }
+                }, 2000);
             })
             .catch(err => {
                 console.error("Error accessing media devices.", err);
@@ -113,15 +448,22 @@
                     video.pause();
                     alert("Face mismatch detected. The exam will be terminated.");
                     window.location.href = "/";
+                } else if(resp === 'MULTIPLE_FACES'){
+                    status.innerText = "Multiple Faces Detected Exam Terminated!";
+                    video.pause();
+                    alert("Multiple faces detected. The exam will be terminated.");
+                    window.location.href = "/";
                 } else if(resp === 'MAX_VIOLATIONS'){
                     status.innerText = "Maximum Violations Reached Exam Terminated!";
                     video.pause();
                     alert("The maximum violations reached. Exam terminated.");
                     window.location.href = "/";
                 } else if(resp.startsWith('VIOLATION:')) {
+                    // Updated parsing logic to handle different violation types
                     const respParts = resp.split(':');
-                    const violationType = respParts[1];
-                    const count = parseInt(respParts[2]);
+                    // Expected format: VIOLATION:TYPE:SUBTYPE:COUNT or VIOLATION:TYPE:COUNT
+                    const violationType = respParts[1]; // e.g., PROHIBITED_ITEM, NOISE_VIOLATION
+                    const count = parseInt(respParts[respParts.length - 1]); // Count is always the last part
                     
                     violationCount.innerText = count;
                     violationBadge.style.display = 'inline-block';
@@ -131,68 +473,44 @@
                         statusMessage += "Excessive noise detected! Please remain silent.";
                     } else if (violationType === 'GAZE_VIOLATION') {
                         statusMessage += "Gaze violation! Please look at the screen.";
+                    } else if (violationType === 'PROHIBITED_ITEM') {
+                        const itemType = respParts[2]; // e.g., MOBILE_PHONE, BOOK
+                        if (itemType === 'MOBILE_PHONE') {
+                            statusMessage += "Electronic device detected";
+                        } else if (itemType === 'BOOK' || itemType === 'NOTES') {
+                            statusMessage += "Books or notes detected! Please remove them.";
+                        } else if (itemType === 'LAPTOP') {
+                            statusMessage += "Electronic device detected";
+                        } else if (itemType === 'AIRPODS_OR_HEADSET') {
+                            statusMessage += "Electronic device detected";
+                        } else {
+                            statusMessage += "Prohibited item detected! Please remove it.";
+                        }
                     } else {
                         statusMessage += "Proctoring violation detected!";
                     }
                     status.innerText = statusMessage;
+                    status.classList.add('violation');
                     
                     violationBadge.style.animation = 'none';
                     setTimeout(() => {
                         violationBadge.style.animation = 'blink 1s linear infinite';
                     }, 10);
                 } else {
+                    // If no violation, ensure the status is not a violation message
+                    if (status.classList.contains('violation')) {
+                       status.classList.remove('violation');
+                    }
                     if (!status.innerText.includes("Violation")) {
                        status.innerText = "Exam in progress...";
                     }
                 }
             })
             .catch(err => console.error('Error during capture:', err));
-        }, 10000);
-    </script>
+        }, 10000); // Capture every 10 seconds
 
-    <p>Answer your MCQs below:</p>
-    <form id="mcq-form">
-        <div>
-            <p>1. Which of the following is a type of supervised learning?</p>
-            <input type="radio" name="q1" value="a"> a) K-Means Clustering<br>
-            <input type="radio" name="q1" value="b"> b) Linear Regression<br>
-            <input type="radio" name="q1" value="c"> c) PCA<br>
-            <input type="radio" name="q1" value="d"> d) Apriori Algorithm<br>
-        </div>
-        <div>
-            <p>2. Which activation function is commonly used in deep learning?</p>
-            <input type="radio" name="q2" value="a"> a) ReLU<br>
-            <input type="radio" name="q2" value="b"> b) Linear<br>
-            <input type="radio" name="q2" value="c"> c) Sigmoid<br>
-            <input type="radio" name="q2" value="d"> d) Both a and c<br>
-        </div>
-        <div>
-            <p>3. Which algorithm is used for classification problems?</p>
-            <input type="radio" name="q3" value="a"> a) Decision Tree<br>
-            <input type="radio" name="q3" value="b"> b) K-Means<br>
-            <input type="radio" name="q3" value="c"> c) PCA<br>
-            <input type="radio" name="q3" value="d"> d) Apriori<br>
-        </div>
-        <div>
-            <p>4. What does "AI" stand for?</p>
-            <input type="radio" name="q4" value="a"> a) Automated Interface<br>
-            <input type="radio" name="q4" value="b"> b) Artificial Intelligence<br>
-            <input type="radio" name="q4" value="c"> c) Algorithmic Integration<br>
-            <input type="radio" name="q4" value="d"> d) Automatic Instruction<br>
-        </div>
-        <div>
-            <p>5. Which of the following is a type of reinforcement learning?</p>
-            <input type="radio" name="q5" value="a"> a) Q-Learning<br>
-            <input type="radio" name="q5" value="b"> b) Linear Regression<br>
-            <input type="radio" name="q5" value="c"> c) KNN<br>
-            <input type="radio" name="q5" value="d"> d) PCA<br>
-        </div>
-        <br>
-        <button type="button" onclick="submitMCQ()">Submit Answers</button>
-    </form>
-
-    <script>
         function submitMCQ() {
+            examSubmitted = true;
             const form = document.getElementById('mcq-form');
             const formData = new FormData(form);
             const answers = { q1: 'b', q2: 'd', q3: 'a', q4: 'b', q5: 'a' };
@@ -206,7 +524,11 @@
                 body: `username=${encodeURIComponent(username)}&score=${score}`
             })
             .then(res => res.text())
-            .then(() => window.location.href = `/score?user=${encodeURIComponent(username)}`)
+            .then(() => {
+                // Exit fullscreen before redirecting
+                exitFullscreen();
+                window.location.href = `/score?user=${encodeURIComponent(username)}`;
+            })
             .catch(err => console.error(err));
         }
     </script>
