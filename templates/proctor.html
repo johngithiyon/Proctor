@@ -241,6 +241,7 @@
         let examSubmitted = false;
         let tabChangeViolationCount = 0;
         let fullscreenViolationCount = 0;
+        let windowChangeViolationCount = 0;
 
         // Function to enter fullscreen
         function enterFullscreen() {
@@ -364,10 +365,55 @@
             .catch(err => console.error('Error reporting tab change violation:', err));
         }
 
+        // Function to report window change violation
+        function reportWindowChangeViolation() {
+            if (examSubmitted) return;
+            
+            windowChangeViolationCount++;
+            fetch('/window-change-violation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(username)}`
+            })
+            .then(res => res.text())
+            .then(resp => {
+                if(resp.startsWith('VIOLATION:')) {
+                    const respParts = resp.split(':');
+                    const count = parseInt(respParts[respParts.length - 1]);
+                    
+                    violationCount.innerText = count;
+                    violationBadge.style.display = 'inline-block';
+                    
+                    status.innerText = `Violation ${count}: Window change detected! Please focus on the exam.`;
+                    status.classList.add('violation');
+                    
+                    violationBadge.style.animation = 'none';
+                    setTimeout(() => {
+                        violationBadge.style.animation = 'blink 1s linear infinite';
+                    }, 10);
+                    
+                    if (resp === 'MAX_VIOLATIONS') {
+                        status.innerText = "Maximum Violations Reached Exam Terminated!";
+                        video.pause();
+                        alert("The maximum violations reached. Exam terminated.");
+                        window.location.href = "/";
+                    }
+                }
+            })
+            .catch(err => console.error('Error reporting window change violation:', err));
+        }
+
         // Detect tab changes
         document.addEventListener('visibilitychange', function() {
             if (document.hidden) {
                 reportTabChangeViolation();
+            }
+        });
+
+        // Detect window focus changes
+        window.addEventListener('blur', function() {
+            if (!examSubmitted) {
+                reportWindowChangeViolation();
             }
         });
 

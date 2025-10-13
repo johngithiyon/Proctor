@@ -54,6 +54,7 @@ func main() {
     http.HandleFunc("/admin", adminPage)
     http.HandleFunc("/fullscreen-violation", fullscreenViolationHandler)
     http.HandleFunc("/tab-change-violation", tabChangeViolationHandler)
+    http.HandleFunc("/window-change-violation", windowChangeViolationHandler)
     fmt.Println("Server running on http://localhost:8080")
     http.ListenAndServe(":8080", nil)
 }
@@ -326,6 +327,41 @@ func tabChangeViolationHandler(w http.ResponseWriter, r *http.Request) {
     if !found {
         violations = append(violations, Violation{Username: username, Count: 1})
         w.Write([]byte(fmt.Sprintf("VIOLATION:TAB_CHANGE_VIOLATION:1")))
+    }
+    mu.Unlock()
+}
+
+// Handle window change violation
+func windowChangeViolationHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != "POST" {
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
+
+    username := r.FormValue("username")
+    
+    mu.Lock()
+    found := false
+    for i, v := range violations {
+        if v.Username == username {
+            violations[i].Count++
+            found = true
+            
+            if violations[i].Count >= 10 {
+                mu.Unlock()
+                w.Write([]byte("MAX_VIOLATIONS"))
+                return
+            }
+            
+            w.Write([]byte(fmt.Sprintf("VIOLATION:WINDOW_CHANGE_VIOLATION:%d", violations[i].Count)))
+            mu.Unlock()
+            return
+        }
+    }
+    
+    if !found {
+        violations = append(violations, Violation{Username: username, Count: 1})
+        w.Write([]byte(fmt.Sprintf("VIOLATION:WINDOW_CHANGE_VIOLATION:1")))
     }
     mu.Unlock()
 }
