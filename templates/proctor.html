@@ -161,6 +161,68 @@
             max-width: 300px;
             display: none;
         }
+        /* Added styles for screenshot prevention */
+        .screenshot-warning {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        .screenshot-warning h2 {
+            margin-bottom: 20px;
+            color: #ff5252;
+        }
+        .screenshot-warning p {
+            max-width: 600px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .screenshot-warning button {
+            padding: 10px 20px;
+            background-color: #ff5252;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .screenshot-warning button:hover {
+            background-color: #e04141;
+        }
+        /* Watermark overlay */
+        .watermark-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9998;
+            opacity: 0.05;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><text x="50%" y="50%" font-size="20" text-anchor="middle" dominant-baseline="middle" transform="rotate(-45 150 150)" fill="%23000">PROTECTED EXAM CONTENT</text></svg>');
+            background-repeat: repeat;
+            display: none;
+        }
+        /* Anti-screenshot overlay */
+        .anti-screenshot {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.01);
+            pointer-events: none;
+            z-index: 9997;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -246,6 +308,15 @@
         <button onclick="enterFullscreen()">Enter Fullscreen</button>
     </div>
 
+    <div id="screenshot-warning" class="screenshot-warning">
+        <h2>Screenshot/Screen Recording Detected</h2>
+        <p>Screenshots and screen recordings are strictly prohibited during this exam. This incident has been recorded and will be reported to your instructor.</p>
+        <button onclick="hideScreenshotWarning()">I Understand</button>
+    </div>
+
+    <div class="watermark-overlay" id="watermark-overlay"></div>
+    <div class="anti-screenshot" id="anti-screenshot"></div>
+
     <div id="debug-info" class="debug-info">
         <h4>Debug Information</h4>
         <div id="debug-content"></div>
@@ -257,6 +328,9 @@
         const violationCountSpan = document.getElementById('count');
         const violationBadge = document.getElementById('badge');
         const fullscreenWarning = document.getElementById('fullscreen-warning');
+        const screenshotWarning = document.getElementById('screenshot-warning');
+        const watermarkOverlay = document.getElementById('watermark-overlay');
+        const antiScreenshot = document.getElementById('anti-screenshot');
         const debugToggle = document.getElementById('debug-toggle');
         const debugInfo = document.getElementById('debug-info');
         const debugContent = document.getElementById('debug-content');
@@ -279,6 +353,8 @@
         let examSubmitted = false;
         let debugMode = false;
         let lastViolationCount = 0;
+        let screenshotWarningShown = false;
+        let lastScreenshotTime = 0;
 
         // Toggle debug mode
         debugToggle.addEventListener('click', function() {
@@ -324,6 +400,48 @@
                 document.msExitFullscreen();
             }
             updateDebugInfo("Exited fullscreen mode");
+        }
+
+        // Function to hide screenshot warning
+        function hideScreenshotWarning() {
+            screenshotWarning.style.display = 'none';
+            screenshotWarningShown = false;
+        }
+
+        // Function to show screenshot warning
+        function showScreenshotWarning() {
+            if (!screenshotWarningShown) {
+                screenshotWarning.style.display = 'flex';
+                screenshotWarningShown = true;
+                updateDebugInfo("Screenshot warning shown");
+            }
+        }
+
+        // Function to trigger anti-screenshot measures
+        function triggerAntiScreenshot() {
+            const now = Date.now();
+            if (now - lastScreenshotTime > 1000) { // Prevent multiple triggers in 1 second
+                lastScreenshotTime = now;
+                
+                // Show watermark overlay
+                watermarkOverlay.style.display = 'block';
+                antiScreenshot.style.display = 'block';
+                
+                // Flash the screen
+                document.body.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+                setTimeout(() => {
+                    document.body.style.backgroundColor = '';
+                }, 200);
+                
+                // Hide overlays after a delay
+                setTimeout(() => {
+                    watermarkOverlay.style.display = 'none';
+                    antiScreenshot.style.display = 'none';
+                }, 2000);
+                
+                reportScreenshotViolation();
+                showScreenshotWarning();
+            }
         }
 
         // Listen for fullscreen changes
@@ -459,6 +577,26 @@
             });
         }
 
+        // Function to report screenshot violation
+        function reportScreenshotViolation() {
+            if (examSubmitted) return;
+            
+            fetch('/screenshot-violation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(username)}`
+            })
+            .then(res => res.text())
+            .then(resp => {
+                handleViolationResponse(resp, `Violation {count}: Screenshot or screen recording detected! This is strictly prohibited.`);
+                updateDebugInfo(`Screenshot violation response: ${resp}`);
+            })
+            .catch(err => {
+                console.error('Error reporting screenshot violation:', err);
+                updateDebugInfo(`Error reporting screenshot violation: ${err.message}`);
+            });
+        }
+
         // Detect tab changes
         document.addEventListener('visibilitychange', function() {
             if (document.hidden) {
@@ -498,10 +636,26 @@
                 return false;
             }
             
-            // Prevent Print Screen
-            if (e.keyCode === 44) {
+            // Prevent Print Screen and other screenshot shortcuts
+            if (e.keyCode === 44 || // Print Screen
+                e.keyCode === 121 || // F10
+                (e.ctrlKey && e.shiftKey && e.keyCode === 83) || // Ctrl+Shift+S (Windows screenshot)
+                (e.metaKey && e.shiftKey && e.keyCode === 4) || // Cmd+Shift+4 (Mac screenshot)
+                (e.metaKey && e.shiftKey && e.keyCode === 3) || // Cmd+Shift+3 (Mac screenshot)
+                (e.metaKey && e.shiftKey && e.keyCode === 5) || // Cmd+Shift+5 (Mac screenshot)
+                (e.ctrlKey && e.altKey && e.keyCode === 80) || // Ctrl+Alt+P (some screenshot tools)
+                (e.ctrlKey && e.altKey && e.keyCode === 83) || // Ctrl+Alt+S (some screenshot tools)
+                (e.ctrlKey && e.keyCode === 44) || // Ctrl+Print Screen
+                (e.altKey && e.keyCode === 44)) { // Alt+Print Screen
                 e.preventDefault();
-                reportCopyAttemptViolation();
+                triggerAntiScreenshot();
+                return false;
+            }
+            
+            // Prevent function keys that might be used for screenshots
+            if (e.keyCode >= 112 && e.keyCode <= 123) { // F1-F12
+                e.preventDefault();
+                triggerAntiScreenshot();
                 return false;
             }
         });
@@ -584,6 +738,128 @@
             }
         }, 500);
 
+        // Add CSS to prevent screenshots in some browsers
+        const style = document.createElement('style');
+        style.innerHTML = `
+            * {
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                -khtml-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+            }
+            
+            input, textarea {
+                -webkit-user-select: text;
+                -khtml-user-select: text;
+                -moz-user-select: text;
+                -ms-user-select: text;
+                user-select: text;
+            }
+            
+            /* Prevent screenshots in some browsers */
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                image-rendering: -webkit-optimize-contrast;
+            }
+            
+            /* Prevent drag and drop of images */
+            img {
+                -webkit-user-drag: none;
+                user-drag: none;
+                pointer-events: none;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Clear clipboard more frequently to prevent screenshot copying
+        setInterval(() => {
+            if (isFullscreen && !examSubmitted) {
+                try {
+                    navigator.clipboard.writeText('');
+                    updateDebugInfo("Clipboard cleared");
+                } catch (e) {
+                    // Clipboard API might not be available or permission denied
+                    updateDebugInfo("Could not clear clipboard: " + e.message);
+                }
+            }
+        }, 5000); // Clear clipboard every 5 seconds
+
+        // Detect if the page is being viewed in a frame (to prevent iframing for screenshots)
+        if (window.self !== window.top) {
+            // Page is in a frame
+            window.top.location = window.self.location;
+        }
+
+        // Monitor for potential screenshot tools
+        let screenshotDetectionInterval = setInterval(() => {
+            if (isFullscreen && !examSubmitted) {
+                // Check for common screenshot processes
+                const suspiciousProcesses = ['snippingtool', 'snip', 'screenshot', 'capture', 'record', 'obs', 'bandicam'];
+                
+                // Random checks to detect potential recording
+                if (Math.random() < 0.2) { // 20% chance each interval
+                    updateDebugInfo("Checking for screen recording software...");
+                    
+                    // In a real implementation, you might use more sophisticated detection
+                    // For now, we'll rely on keyboard shortcuts and other detection methods
+                }
+            }
+        }, 3000); // Check every 3 seconds
+
+        // Add a dynamic watermark
+        function addDynamicWatermark() {
+            const watermark = document.createElement('div');
+            watermark.style.position = 'fixed';
+            watermark.style.top = '0';
+            watermark.style.left = '0';
+            watermark.style.width = '100%';
+            watermark.style.height = '100%';
+            watermark.style.pointerEvents = 'none';
+            watermark.style.zIndex = '9999';
+            watermark.style.opacity = '0';
+            watermark.style.backgroundImage = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Ctext x='50%25' y='50%25' font-size='16' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 150 150)' fill='%23000' opacity='0.2'%3E${username} - ${exam} - ${new Date().toLocaleString()}%3C/text%3E%3C/svg%3E")`;
+            watermark.style.backgroundRepeat = 'repeat';
+            watermark.id = 'dynamic-watermark';
+            document.body.appendChild(watermark);
+            
+            // Update watermark timestamp periodically
+            setInterval(() => {
+                if (isFullscreen && !examSubmitted) {
+                    watermark.style.backgroundImage = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Ctext x='50%25' y='50%25' font-size='16' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 150 150)' fill='%23000' opacity='0.2'%3E${username} - ${exam} - ${new Date().toLocaleString()}%3C/text%3E%3C/svg%3E")`;
+                }
+            }, 60000); // Update every minute
+        }
+
+        // Monitor for screen capture API usage
+        const originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia;
+        if (originalGetDisplayMedia) {
+            navigator.mediaDevices.getDisplayMedia = function() {
+                triggerAntiScreenshot();
+                return Promise.reject(new Error('Screen capture is not allowed during exams'));
+            };
+        }
+
+        // Monitor for potential screenshot attempts by checking for unexpected focus changes
+        let lastFocusTime = Date.now();
+        document.addEventListener('focus', function() {
+            const now = Date.now();
+            if (now - lastFocusTime < 100) { // Rapid focus changes might indicate screenshot tools
+                triggerAntiScreenshot();
+            }
+            lastFocusTime = now;
+        }, true);
+
+        // Add a random check for screenshot attempts
+        setInterval(() => {
+            if (isFullscreen && !examSubmitted && Math.random() < 0.05) { // 5% chance
+                updateDebugInfo("Random screenshot check...");
+                // In a real implementation, you might use more sophisticated detection
+            }
+        }, 10000); // Check every 10 seconds
+
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
                 video.srcObject = stream;
@@ -618,6 +894,8 @@
                     if (!isFullscreen) {
                         fullscreenWarning.style.display = 'flex';
                     }
+                    // Initialize screenshot prevention measures
+                    addDynamicWatermark();
                 }, 2000);
                 
                 updateDebugInfo("Camera and microphone access granted");
@@ -701,6 +979,9 @@
                             statusMessage += "Window change detected! Please focus on the exam.";
                         } else if (violationType === 'COPY_ATTEMPT_VIOLATION') {
                             statusMessage += "Copy attempt detected! Copying questions is not allowed.";
+                        } else if (violationType === 'SCREENSHOT_VIOLATION') {
+                            statusMessage += "Screenshot or screen recording detected! This is strictly prohibited.";
+                            showScreenshotWarning();
                         } else {
                             statusMessage += "Proctoring violation detected!";
                         }
