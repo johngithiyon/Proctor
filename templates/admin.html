@@ -13,11 +13,106 @@
         .logout-btn:hover { background-color: #45a049; }
         .section { margin-top: 30px; }
         .violation-high { color: red; font-weight: bold; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; }
+        .form-group input { width: 100%; padding: 8px; box-sizing: border-box; }
+        .submit-btn { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; cursor: pointer; }
+        .submit-btn:hover { background-color: #45a049; }
+        .success-message { color: green; margin-top: 10px; }
+        .error-message { color: red; margin-top: 10px; }
+        .student-list { margin-top: 20px; }
+        .delete-btn { background-color: #f44336; color: white; padding: 5px 10px; border: none; cursor: pointer; }
+        .delete-btn:hover { background-color: #d32f2f; }
+        .preview-image { max-width: 200px; max-height: 200px; margin-top: 10px; }
+        .camera-section { margin: 20px 0; }
+        #admin-video { width: 320px; height: 240px; border: 1px solid #ccc; border-radius: 5px; }
+        .camera-status { margin: 10px 0; font-weight: bold; }
+        .hidden { display: none; }
+        .validating { color: orange; margin-top: 10px; }
+        .face-detection-status {
+            margin: 10px 0;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .face-detected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .face-not-detected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .form-container {
+            display: flex;
+            gap: 20px;
+        }
+        .form-left {
+            flex: 1;
+        }
+        .form-right {
+            flex: 1;
+        }
     </style>
 </head>
 <body>
     <h1>Admin Dashboard</h1>
     <a href="/"><button class="logout-btn">Logout</button></a>
+
+    <div class="section">
+        <h2>Add New Student</h2>
+        <form id="add-student-form">
+            <div class="form-container">
+                <div class="form-left">
+                    <div class="form-group">
+                        <label for="username">Username:</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                </div>
+                <div class="form-right">
+                    <div class="camera-section">
+                        <h3>Capture Student Reference Face</h3>
+                        <p>Please position the student's face clearly in the camera</p>
+                        <video id="admin-video" autoplay></video>
+                        <canvas id="admin-canvas" class="hidden"></canvas>
+                        <div class="camera-status" id="admin-camera-status">Initializing camera...</div>
+                        <button type="button" id="admin-capture-btn" disabled>Capture Face</button>
+                        <div id="admin-photo-preview"></div>
+                        <div id="admin-face-detection-status" class="face-detection-status hidden"></div>
+                        <input type="hidden" id="admin-face-image" name="face_image">
+                        <input type="hidden" id="admin-face-validated" name="face_validated" value="false">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" id="admin-submit-btn" disabled class="submit-btn">Add Student</button>
+            <div id="add-student-message"></div>
+        </form>
+    </div>
+
+    <div class="section student-list">
+        <h2>Registered Students</h2>
+        <table>
+            <tr>
+                <th>Username</th>
+                <th>Reference Image</th>
+                <th>Action</th>
+            </tr>
+            {{range .Students}}
+            <tr>
+                <td>{{.Username}}</td>
+                <td><img src="/reference-images/{{.Username}}" class="preview-image"></td>
+                <td><button class="delete-btn" onclick="deleteStudent('{{.Username}}')">Delete</button></td>
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="3">No students registered</td>
+            </tr>
+            {{end}}
+        </table>
+    </div>
 
     <div class="section">
         <h2>Student Results</h2>
@@ -66,5 +161,208 @@
             {{end}}
         </table>
     </div>
+
+    <script>
+        // Admin camera functionality
+        const adminVideo = document.getElementById('admin-video');
+        const adminCanvas = document.getElementById('admin-canvas');
+        const adminCaptureBtn = document.getElementById('admin-capture-btn');
+        const adminSubmitBtn = document.getElementById('admin-submit-btn');
+        const adminCameraStatus = document.getElementById('admin-camera-status');
+        const adminPhotoPreview = document.getElementById('admin-photo-preview');
+        const adminFaceImageInput = document.getElementById('admin-face-image');
+        const adminFaceValidatedInput = document.getElementById('admin-face-validated');
+        const adminFaceDetectionStatus = document.getElementById('admin-face-detection-status');
+        const addStudentForm = document.getElementById('add-student-form');
+        
+        let adminStream = null;
+        let adminPhotoCaptured = false;
+        let adminFaceValidated = false;
+
+        // Initialize admin camera
+        async function initAdminCamera() {
+            try {
+                adminStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                adminVideo.srcObject = adminStream;
+                adminCameraStatus.textContent = "Camera ready. Please capture the student's face.";
+                adminCaptureBtn.disabled = false;
+            } catch (err) {
+                console.error("Error accessing camera:", err);
+                adminCameraStatus.textContent = "Error: Could not access camera. Please check permissions.";
+                adminCameraStatus.classList.add('error');
+            }
+        }
+
+        // Validate face in the captured image for admin
+        async function validateAdminFace(dataURL) {
+            adminFaceDetectionStatus.textContent = "Validating face... Please wait.";
+            adminFaceDetectionStatus.classList.remove('hidden', 'face-detected', 'face-not-detected');
+            adminFaceDetectionStatus.classList.add('validating');
+            
+            try {
+                const response = await fetch('/validate-face', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `image=${encodeURIComponent(dataURL)}`
+                });
+                
+                const result = await response.text();
+                
+                if (result === 'FACE_DETECTED') {
+                    adminFaceDetectionStatus.textContent = "Face captured successfully!";
+                    adminFaceDetectionStatus.classList.remove('validating', 'face-not-detected');
+                    adminFaceDetectionStatus.classList.add('face-detected');
+                    adminFaceValidated = true;
+                    adminFaceValidatedInput.value = "true";
+                    adminSubmitBtn.disabled = false;
+                } else {
+                    adminFaceDetectionStatus.textContent = "No face detected. Please try again with the face clearly visible.";
+                    adminFaceDetectionStatus.classList.remove('validating', 'face-detected');
+                    adminFaceDetectionStatus.classList.add('face-not-detected');
+                    adminFaceValidated = false;
+                    adminFaceValidatedInput.value = "false";
+                    adminSubmitBtn.disabled = true;
+                }
+            } catch (err) {
+                console.error('Error validating face:', err);
+                adminFaceDetectionStatus.textContent = "Error validating face. Please try again.";
+                adminFaceDetectionStatus.classList.remove('validating', 'face-detected');
+                adminFaceDetectionStatus.classList.add('face-not-detected');
+                adminFaceValidated = false;
+                adminFaceValidatedInput.value = "false";
+                adminSubmitBtn.disabled = true;
+            }
+        }
+
+        // Capture photo for admin
+        adminCaptureBtn.addEventListener('click', function() {
+            adminCanvas.width = adminVideo.videoWidth;
+            adminCanvas.height = adminVideo.videoHeight;
+            const context = adminCanvas.getContext('2d');
+            context.drawImage(adminVideo, 0, 0);
+            
+            const dataURL = adminCanvas.toDataURL('image/jpeg');
+            adminFaceImageInput.value = dataURL;
+            
+            // Show preview
+            const img = document.createElement('img');
+            img.src = dataURL;
+            img.width = 160;
+            img.height = 120;
+            img.style.border = '1px solid #ccc';
+            img.style.borderRadius = '5px';
+            
+            adminPhotoPreview.innerHTML = '';
+            adminPhotoPreview.appendChild(img);
+            
+            const status = document.createElement('div');
+            status.textContent = 'Photo captured! Validating face...';
+            status.classList.add('validating');
+            adminPhotoPreview.appendChild(status);
+            
+            adminPhotoCaptured = true;
+            adminCaptureBtn.disabled = true;
+            
+            // Validate face
+            validateAdminFace(dataURL);
+        });
+
+        // Retake photo for admin
+        function retakeAdminPhoto() {
+            adminPhotoCaptured = false;
+            adminFaceValidated = false;
+            adminFaceValidatedInput.value = "false";
+            adminSubmitBtn.disabled = true;
+            adminCaptureBtn.disabled = false;
+            adminPhotoPreview.innerHTML = '';
+            adminFaceDetectionStatus.classList.add('hidden');
+        }
+
+        // Add retake button after photo is captured
+        function addAdminRetakeButton() {
+            const retakeBtn = document.createElement('button');
+            retakeBtn.textContent = 'Retake Photo';
+            retakeBtn.type = 'button';
+            retakeBtn.style.marginTop = '10px';
+            retakeBtn.addEventListener('click', retakeAdminPhoto);
+            adminPhotoPreview.appendChild(retakeBtn);
+        }
+
+        // Handle form submission
+        addStudentForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (!adminPhotoCaptured || !adminFaceValidated) {
+                const messageDiv = document.getElementById('add-student-message');
+                messageDiv.textContent = 'Please capture and validate the student face before adding.';
+                messageDiv.className = 'error-message';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('username', document.getElementById('username').value);
+            formData.append('password', document.getElementById('password').value);
+            formData.append('face_image', adminFaceImageInput.value);
+            
+            const messageDiv = document.getElementById('add-student-message');
+            
+            fetch('/add-student', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    messageDiv.textContent = 'Student added successfully!';
+                    messageDiv.className = 'success-message';
+                    this.reset();
+                    adminPhotoPreview.innerHTML = '';
+                    adminFaceDetectionStatus.classList.add('hidden');
+                    adminPhotoCaptured = false;
+                    adminFaceValidated = false;
+                    adminFaceValidatedInput.value = "false";
+                    adminSubmitBtn.disabled = true;
+                    adminCaptureBtn.disabled = false;
+                    // Refresh the page to show the new student in the list
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    messageDiv.textContent = 'Error: ' + data.message;
+                    messageDiv.className = 'error-message';
+                }
+            })
+            .catch(error => {
+                messageDiv.textContent = 'Error: ' + error.message;
+                messageDiv.className = 'error-message';
+            });
+        });
+
+        // Delete student
+        function deleteStudent(username) {
+            if (confirm('Are you sure you want to delete this student?')) {
+                fetch('/delete-student', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'username=' + encodeURIComponent(username)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Refresh the page to update the student list
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error.message);
+                });
+            }
+        }
+
+        // Initialize admin camera on page load
+        window.addEventListener('load', initAdminCamera);
+    </script>
 </body>
 </html>

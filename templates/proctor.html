@@ -1,192 +1,629 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Login</title>
+    <title>Proctor Mode Exam</title>
     <style>
-        body { font-family: Arial; text-align: center; margin-top: 80px; }
-        .login-container { display: inline-block; padding: 30px; border: 1px solid #ccc; border-radius: 10px; }
-        .camera-section { margin: 20px 0; }
-        #login-video { width: 320px; height: 240px; border: 1px solid #ccc; border-radius: 5px; }
-        input, select { padding: 10px; margin: 5px; width: 200px; }
-        button { padding: 10px 20px; cursor: pointer; background-color: #007BFF; color: white; border: none; border-radius: 5px; margin: 5px; }
-        .error { color: red; margin-top: 10px; }
-        .success { color: green; margin-top: 10px; }
-        .camera-status { margin: 10px 0; font-weight: bold; }
-        .hidden { display: none; }
-        .validating { color: orange; margin-top: 10px; }
-        .face-detection-status {
-            margin: 10px 0;
-            padding: 5px;
+        body { 
+            font-family: sans-serif; 
+            text-align:center; 
+            margin-top:50px; 
+            overflow: hidden; /* Prevent scrolling when in fullscreen */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .header-section {
+            flex-shrink: 0;
+            padding: 10px;
+        }
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .video-section {
+            flex: 0 0 400px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .questions-section {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            text-align: left;
+            padding-bottom: 80px; /* Add padding to ensure submit button is always visible */
+        }
+        #video { border: 2px solid #ccc; border-radius: 8px; }
+        #status { font-weight: bold; margin-top: 10px; }
+        .violation { color: red; animation: blink 1s linear infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+        #violation-count {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
             border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 100;
         }
-        .face-detected {
-            background-color: #d4edda;
-            color: #155724;
+        .violation-badge {
+            display: inline-block;
+            background-color: #dc3545;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            margin-left: 10px;
         }
-        .face-not-detected {
-            background-color: #f8d7da;
-            color: #721c24;
+        .fullscreen-warning {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .fullscreen-warning h2 {
+            margin-bottom: 20px;
+        }
+        .fullscreen-warning button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .fullscreen-warning button:hover {
+            background-color: #45a049;
+        }
+        .question {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .question p {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .question-options {
+            margin-left: 20px;
+        }
+        .submit-section {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 15px;
+            text-align: center;
+            background-color: #f8f9fa;
+            border-top: 1px solid #ddd;
+            z-index: 100;
+        }
+        .submit-button {
+            padding: 12px 30px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .submit-button:hover {
+            background-color: #45a049;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .submit-instruction {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        .debug-info {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 300px;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <h2>Login Page</h2>
-    <div class="login-container">
-        <form id="login-form" action="/login" method="POST">
-            <input type="text" name="username" placeholder="Username" required><br>
-            <input type="password" name="password" placeholder="Password" required><br>
-            <select name="role">
-                <option value="student">Student</option>
-                <option value="admin">Admin</option>
-            </select><br>
-            
-            <div class="camera-section">
-                <h3>Face Verification</h3>
-                <p>Please position your face in the camera and click "Capture Photo"</p>
-                <video id="login-video" autoplay></video>
-                <canvas id="login-canvas" class="hidden"></canvas>
-                <div class="camera-status" id="camera-status">Initializing camera...</div>
-                <button type="button" id="capture-btn" disabled>Capture Photo</button>
-                <div id="photo-preview"></div>
-                <div id="face-detection-status" class="face-detection-status hidden"></div>
-                <input type="hidden" id="face-image" name="face_image">
-                <input type="hidden" id="face-validated" name="face_validated" value="false">
+    <div class="header-section">
+        <h2>Proctor Mode Exam</h2>
+        <p>Student: <span id="student-name"></span></p>
+        <p>Exam: <span id="exam-name"></span></p>
+    </div>
+
+    <div class="main-content">
+        <div class="video-section">
+            <video id="video" width="400" height="300" autoplay></video>
+            <p id="status">Exam started... Please maintain silence and look at the screen.</p>
+            <button id="debug-toggle" style="margin-top: 10px; padding: 5px 10px; font-size: 12px;">Toggle Debug</button>
+        </div>
+
+        <div class="questions-section">
+            <h3>Answer your MCQs below:</h3>
+            <form id="mcq-form">
+                <div class="question">
+                    <p>1. Which of the following is a type of supervised learning?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q1" value="a"> a) K-Means Clustering<br>
+                        <input type="radio" name="q1" value="b"> b) Linear Regression<br>
+                        <input type="radio" name="q1" value="c"> c) PCA<br>
+                        <input type="radio" name="q1" value="d"> d) Apriori Algorithm<br>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>2. Which activation function is commonly used in deep learning?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q2" value="a"> a) ReLU<br>
+                        <input type="radio" name="q2" value="b"> b) Linear<br>
+                        <input type="radio" name="q2" value="c"> c) Sigmoid<br>
+                        <input type="radio" name="q2" value="d"> d) Both a and c<br>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>3. Which algorithm is used for classification problems?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q3" value="a"> a) Decision Tree<br>
+                        <input type="radio" name="q3" value="b"> b) K-Means<br>
+                        <input type="radio" name="q3" value="c"> c) PCA<br>
+                        <input type="radio" name="q3" value="d"> d) Apriori<br>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>4. What does "AI" stand for?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q4" value="a"> a) Automated Interface<br>
+                        <input type="radio" name="q4" value="b"> b) Artificial Intelligence<br>
+                        <input type="radio" name="q4" value="c"> c) Algorithmic Integration<br>
+                        <input type="radio" name="q4" value="d"> d) Automatic Instruction<br>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>5. Which of the following is a type of reinforcement learning?</p>
+                    <div class="question-options">
+                        <input type="radio" name="q5" value="a"> a) Q-Learning<br>
+                        <input type="radio" name="q5" value="b"> b) Linear Regression<br>
+                        <input type="radio" name="q5" value="c"> c) KNN<br>
+                        <input type="radio" name="q5" value="d"> d) PCA<br>
+                    </div>
+                </div>
+            </form>
+            <div class="submit-instruction">
+                <p>Submit button is located at the bottom of the page</p>
             </div>
-            
-            <button type="submit" id="login-btn" disabled>Login</button>
-            {{if .}}<div class="error">{{.}}</div>{{end}}
-        </form>
+        </div>
+    </div>
+
+    <div class="submit-section">
+        <button type="button" class="submit-button" onclick="submitMCQ()">Submit Answers</button>
+    </div>
+    
+    <div id="violation-count">
+        Violations: <span id="count">0</span><span class="violation-badge" id="badge" style="display: none;">!</span>
+    </div>
+
+    <div id="fullscreen-warning" class="fullscreen-warning" style="display: none;">
+        <h2>Fullscreen Mode Required</h2>
+        <p>This exam must be taken in fullscreen mode. Please click the button below to enter fullscreen.</p>
+        <button onclick="enterFullscreen()">Enter Fullscreen</button>
+    </div>
+
+    <div id="debug-info" class="debug-info">
+        <h4>Debug Information</h4>
+        <div id="debug-content"></div>
     </div>
 
     <script>
-        const video = document.getElementById('login-video');
-        const canvas = document.getElementById('login-canvas');
-        const captureBtn = document.getElementById('capture-btn');
-        const loginBtn = document.getElementById('login-btn');
-        const cameraStatus = document.getElementById('camera-status');
-        const photoPreview = document.getElementById('photo-preview');
-        const faceImageInput = document.getElementById('face-image');
-        const faceValidatedInput = document.getElementById('face-validated');
-        const faceDetectionStatus = document.getElementById('face-detection-status');
-        const loginForm = document.getElementById('login-form');
-        
-        let stream = null;
-        let photoCaptured = false;
-        let faceValidated = false;
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+        const violationCountSpan = document.getElementById('count');
+        const violationBadge = document.getElementById('badge');
+        const fullscreenWarning = document.getElementById('fullscreen-warning');
+        const debugToggle = document.getElementById('debug-toggle');
+        const debugInfo = document.getElementById('debug-info');
+        const debugContent = document.getElementById('debug-content');
 
-        // Initialize camera
-        async function initCamera() {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                video.srcObject = stream;
-                cameraStatus.textContent = "Camera ready. Please capture your photo.";
-                captureBtn.disabled = false;
-            } catch (err) {
-                console.error("Error accessing camera:", err);
-                cameraStatus.textContent = "Error: Could not access camera. Please check permissions.";
-                cameraStatus.classList.add('error');
-            }
-        }
+        const params = new URLSearchParams(window.location.search);
+        const username = params.get('user');
+        const exam = params.get('exam');
+        // IMPORTANT: Assume reference_face is passed as a URL parameter from the login page
+        const referenceFace = params.get('reference_face'); 
 
-        // Validate face in the captured image
-        async function validateFace(dataURL) {
-            faceDetectionStatus.textContent = "Validating face... Please wait.";
-            faceDetectionStatus.classList.remove('hidden', 'face-detected', 'face-not-detected');
-            faceDetectionStatus.classList.add('validating');
-            
-            try {
-                const response = await fetch('/validate-face', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `image=${encodeURIComponent(dataURL)}`
-                });
-                
-                const result = await response.text();
-                
-                if (result === 'FACE_DETECTED') {
-                    faceDetectionStatus.textContent = "Face detected successfully!";
-                    faceDetectionStatus.classList.remove('validating', 'face-not-detected');
-                    faceDetectionStatus.classList.add('face-detected');
-                    faceValidated = true;
-                    faceValidatedInput.value = "true";
-                    loginBtn.disabled = false;
-                } else {
-                    faceDetectionStatus.textContent = "No face detected. Please try again with your face clearly visible.";
-                    faceDetectionStatus.classList.remove('validating', 'face-detected');
-                    faceDetectionStatus.classList.add('face-not-detected');
-                    faceValidated = false;
-                    faceValidatedInput.value = "false";
-                    loginBtn.disabled = true;
-                }
-            } catch (err) {
-                console.error('Error validating face:', err);
-                faceDetectionStatus.textContent = "Error validating face. Please try again.";
-                faceDetectionStatus.classList.remove('validating', 'face-detected');
-                faceDetectionStatus.classList.add('face-not-detected');
-                faceValidated = false;
-                faceValidatedInput.value = "false";
-                loginBtn.disabled = true;
-            }
-        }
+        document.getElementById('student-name').innerText = username;
+        document.getElementById('exam-name').innerText = exam;
 
-        // Capture photo
-        captureBtn.addEventListener('click', function() {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0);
-            
-            const dataURL = canvas.toDataURL('image/jpeg');
-            faceImageInput.value = dataURL;
-            
-            // Show preview
-            const img = document.createElement('img');
-            img.src = dataURL;
-            img.width = 160;
-            img.height = 120;
-            img.style.border = '1px solid #ccc';
-            img.style.borderRadius = '5px';
-            
-            photoPreview.innerHTML = '';
-            photoPreview.appendChild(img);
-            
-            const status = document.createElement('div');
-            status.textContent = 'Photo captured! Validating face...';
-            status.classList.add('validating');
-            photoPreview.appendChild(status);
-            
-            photoCaptured = true;
-            captureBtn.disabled = true;
-            
-            // Validate face
-            validateFace(dataURL);
+        let audioContext;
+        let analyser;
+        let microphone;
+        let javascriptNode;
+        let isNoiseViolation = false;
+        let isFullscreen = false;
+        let examSubmitted = false;
+        let debugMode = false;
+        let lastViolationCount = 0;
+
+        // Toggle debug mode
+        debugToggle.addEventListener('click', function() {
+            debugMode = !debugMode;
+            debugInfo.style.display = debugMode ? 'block' : 'none';
         });
 
-        // Retake photo
-        function retakePhoto() {
-            photoCaptured = false;
-            faceValidated = false;
-            faceValidatedInput.value = "false";
-            loginBtn.disabled = true;
-            captureBtn.disabled = false;
-            photoPreview.innerHTML = '';
-            faceDetectionStatus.classList.add('hidden');
+        // Function to update debug information
+        function updateDebugInfo(message) {
+            if (debugMode) {
+                const timestamp = new Date().toLocaleTimeString();
+                debugContent.innerHTML = `<div>[${timestamp}] ${message}</div>` + debugContent.innerHTML;
+                // Keep only the last 10 messages
+                const messages = debugContent.children;
+                if (messages.length > 10) {
+                    debugContent.removeChild(messages[messages.length - 1]);
+                }
+            }
         }
 
-        // Form submission
-        loginForm.addEventListener('submit', function(e) {
-            if (!photoCaptured || !faceValidated) {
+        // Function to enter fullscreen
+        function enterFullscreen() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) { /* IE11 */
+                elem.msRequestFullscreen();
+            }
+            fullscreenWarning.style.display = 'none';
+            isFullscreen = true;
+            updateDebugInfo("Entered fullscreen mode");
+        }
+
+        // Function to exit fullscreen
+        function exitFullscreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE11 */
+                document.msExitFullscreen();
+            }
+            updateDebugInfo("Exited fullscreen mode");
+        }
+
+        // Listen for fullscreen changes
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        function handleFullscreenChange() {
+            const isCurrentlyFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || 
+                document.mozFullScreenElement || document.msFullscreenElement);
+            
+            if (!isCurrentlyFullscreen && isFullscreen && !examSubmitted) {
+                // User exited fullscreen mode
+                reportFullscreenViolation();
+                
+                // Show warning
+                fullscreenWarning.style.display = 'flex';
+                isFullscreen = false;
+                updateDebugInfo("Fullscreen violation detected");
+            } else if (isCurrentlyFullscreen) {
+                fullscreenWarning.style.display = 'none';
+                isFullscreen = true;
+                updateDebugInfo("Fullscreen mode active");
+            }
+        }
+
+        // Generic function to handle violation responses
+        function handleViolationResponse(resp, defaultMessage) {
+            if(resp.startsWith('VIOLATION:')){
+                const respParts = resp.split(':');
+                const count = parseInt(respParts[respParts.length - 1]);
+                
+                // Only update if count is higher than last count to prevent duplicates
+                if (count > lastViolationCount) {
+                    lastViolationCount = count;
+                    violationCountSpan.innerText = count;
+                    violationBadge.style.display = 'inline-block';
+                    
+                    status.innerText = defaultMessage.replace('{count}', count);
+                    status.classList.add('violation');
+                    
+                    violationBadge.style.animation = 'none';
+                    setTimeout(() => {
+                        violationBadge.style.animation = 'blink 1s linear infinite';
+                    }, 10);
+                }
+                
+                if (resp === 'MAX_VIOLATIONS') {
+                    status.innerText = "Maximum Violations Reached. Exam Terminated!";
+                    video.pause();
+                    alert("The maximum violations reached. Exam terminated.");
+                    window.location.href = "/";
+                }
+            }
+        }
+
+        // Function to report fullscreen violation
+        function reportFullscreenViolation() {
+            fetch('/fullscreen-violation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(username)}`
+            })
+            .then(res => res.text())
+            .then(resp => {
+                handleViolationResponse(resp, `Violation {count}: You exited fullscreen mode. Please return to fullscreen.`);
+                updateDebugInfo(`Fullscreen violation response: ${resp}`);
+            })
+            .catch(err => {
+                console.error('Error reporting fullscreen violation:', err);
+                updateDebugInfo(`Error reporting fullscreen violation: ${err.message}`);
+            });
+        }
+
+        // Function to report tab change violation
+        function reportTabChangeViolation() {
+            if (examSubmitted) return;
+            
+            fetch('/tab-change-violation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(username)}`
+            })
+            .then(res => res.text())
+            .then(resp => {
+                handleViolationResponse(resp, `Violation {count}: Tab change detected! Please focus on the exam.`);
+                updateDebugInfo(`Tab change violation response: ${resp}`);
+            })
+            .catch(err => {
+                console.error('Error reporting tab change violation:', err);
+                updateDebugInfo(`Error reporting tab change violation: ${err.message}`);
+            });
+        }
+
+        // Function to report window change violation
+        function reportWindowChangeViolation() {
+            if (examSubmitted) return;
+            
+            fetch('/window-change-violation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(username)}`
+            })
+            .then(res => res.text())
+            .then(resp => {
+                handleViolationResponse(resp, `Violation {count}: Window change detected! Please focus on the exam.`);
+                updateDebugInfo(`Window change violation response: ${resp}`);
+            })
+            .catch(err => {
+                console.error('Error reporting window change violation:', err);
+                updateDebugInfo(`Error reporting window change violation: ${err.message}`);
+            });
+        }
+
+        // Detect tab changes
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                reportTabChangeViolation();
+            }
+        });
+
+        // Detect window focus changes
+        window.addEventListener('blur', function() {
+            if (!examSubmitted) {
+                reportWindowChangeViolation();
+            }
+        });
+
+        // Prevent right-click
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            return false;
+        });
+
+        // Prevent keyboard shortcuts that might exit fullscreen
+        document.addEventListener('keydown', function(e) {
+            // F11, Esc (when in fullscreen), Alt+Tab
+            if (e.keyCode === 122 || 
+                (e.keyCode === 27 && isFullscreen) || 
+                (e.altKey && e.keyCode === 9)) {
                 e.preventDefault();
-                const error = document.createElement('div');
-                error.textContent = 'Please capture and validate your face photo before logging in.';
-                error.classList.add('error');
-                loginForm.appendChild(error);
                 return false;
             }
         });
 
-        // Initialize camera on page load
-        window.addEventListener('load', initCamera);
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                video.srcObject = stream;
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+                analyser.smoothingTimeConstant = 0.8;
+                analyser.fftSize = 1024;
+                microphone.connect(analyser);
+                analyser.connect(javascriptNode);
+                javascriptNode.connect(audioContext.destination);
+
+                javascriptNode.onaudioprocess = function() {
+                    const array = new Uint8Array(analyser.frequencyBinCount);
+                    analyser.getByteFrequencyData(array);
+                    let values = 0;
+                    const length = array.length;
+                    for (let i = 0; i < length; i++) {
+                        values += array[i];
+                    }
+                    const average = values / length;
+                    if (average > 30) {
+                        isNoiseViolation = true;
+                    } else {
+                        isNoiseViolation = false;
+                    }
+                };
+                
+                // After getting camera access, prompt for fullscreen
+                setTimeout(() => {
+                    if (!isFullscreen) {
+                        fullscreenWarning.style.display = 'flex';
+                    }
+                }, 2000);
+                
+                updateDebugInfo("Camera and microphone access granted");
+            })
+            .catch(err => {
+                console.error("Error accessing media devices.", err);
+                status.innerText = "Error: Could not access camera or microphone.";
+                updateDebugInfo(`Error accessing media devices: ${err.message}`);
+            });
+
+        setInterval(() => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const dataURL = canvas.toDataURL('image/png');
+
+            // MODIFIED: Include reference_face in the request body
+            let body = `image=${encodeURIComponent(dataURL)}&username=${encodeURIComponent(username)}&noise_violation=${isNoiseViolation}`;
+            if (referenceFace) {
+                body += `&reference_face=${encodeURIComponent(referenceFace)}`;
+            }
+
+            updateDebugInfo(`Sending capture request... Noise violation: ${isNoiseViolation}`);
+
+            fetch('/capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body
+            })
+            .then(res => res.text())
+            .then(resp => {
+                updateDebugInfo(`Server response: ${resp}`);
+                
+                if(resp === 'FACE_MISMATCH'){
+                    status.innerText = "Face Mismatch. Exam Terminated!";
+                    video.pause();
+                    alert("Face mismatch detected. The exam will be terminated.");
+                    window.location.href = "/";
+                } else if(resp === 'MULTIPLE_FACES'){
+                    status.innerText = "Multiple Faces Detected. Exam Terminated!";
+                    video.pause();
+                    alert("Multiple faces detected. The exam will be terminated.");
+                    window.location.href = "/";
+                } else if(resp === 'MAX_VIOLATIONS'){
+                    status.innerText = "Maximum Violations Reached. Exam Terminated!";
+                    video.pause();
+                    alert("The maximum violations reached. Exam terminated.");
+                    window.location.href = "/";
+                } else if(resp.startsWith('VIOLATION:')) {
+                    // Updated parsing logic to handle different violation types
+                    const respParts = resp.split(':');
+                    const violationType = respParts[1]; // e.g., PROHIBITED_ITEM, NOISE_VIOLATION
+                    const count = parseInt(respParts[respParts.length - 1]);
+                    
+                    // Only update if count is higher than last count to prevent duplicates
+                    if (count > lastViolationCount) {
+                        lastViolationCount = count;
+                        violationCountSpan.innerText = count;
+                        violationBadge.style.display = 'inline-block';
+                        
+                        let statusMessage = `Violation ${count}: `;
+                        if (violationType === 'NOISE_VIOLATION') {
+                            statusMessage += "Excessive noise detected! Please remain silent.";
+                        } else if (violationType === 'GAZE_VIOLATION') {
+                            statusMessage += "Gaze violation! Please look at the screen.";
+                        } else if (violationType === 'PROHIBITED_ITEM') {
+                            const itemType = respParts[2]; // e.g., MOBILE_PHONE, BOOK
+                            if (itemType === 'MOBILE_PHONE' || itemType === 'LAPTOP' || itemType === 'AIRPODS_OR_HEADSET') {
+                                statusMessage += "Electronic device detected.";
+                            } else if (itemType === 'BOOK') {
+                                statusMessage += "Books or notes detected! Please remove them.";
+                            } else {
+                                statusMessage += "Prohibited item detected! Please remove it.";
+                            }
+                        } else if (violationType === 'FULLSCREEN_VIOLATION') {
+                            statusMessage += "You exited fullscreen mode. Please return to fullscreen.";
+                        } else if (violationType === 'TAB_CHANGE_VIOLATION') {
+                            statusMessage += "Tab change detected! Please focus on the exam.";
+                        } else if (violationType === 'WINDOW_CHANGE_VIOLATION') {
+                            statusMessage += "Window change detected! Please focus on the exam.";
+                        } else {
+                            statusMessage += "Proctoring violation detected!";
+                        }
+                        status.innerText = statusMessage;
+                        status.classList.add('violation');
+                        
+                        violationBadge.style.animation = 'none';
+                        setTimeout(() => {
+                            violationBadge.style.animation = 'blink 1s linear infinite';
+                        }, 10);
+                    }
+                } else {
+                    // If no violation, ensure the status is not a violation message
+                    if (status.classList.contains('violation')) {
+                       status.classList.remove('violation');
+                    }
+                    if (!status.innerText.includes("Violation")) {
+                       status.innerText = "Exam in progress...";
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Error during capture:', err);
+                status.innerText = "Error during proctoring check. Please check your connection.";
+                updateDebugInfo(`Error during capture: ${err.message}`);
+            });
+        }, 10000); // Capture every 10 seconds
+
+        function submitMCQ() {
+            examSubmitted = true;
+            const form = document.getElementById('mcq-form');
+            const formData = new FormData(form);
+            const answers = { q1: 'b', q2: 'd', q3: 'a', q4: 'b', q5: 'a' };
+            let score = 0;
+            for (let [q, a] of Object.entries(answers)) {
+                if (formData.get(q) === a) score++;
+            }
+            fetch('/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(username)}&score=${score}`
+            })
+            .then(res => res.text())
+            .then(() => {
+                // Exit fullscreen before redirecting
+                exitFullscreen();
+                window.location.href = `/score?user=${encodeURIComponent(username)}`;
+            })
+            .catch(err => {
+                console.error(err);
+                updateDebugInfo(`Error submitting exam: ${err.message}`);
+            });
+        }
     </script>
 </body>
 </html>
