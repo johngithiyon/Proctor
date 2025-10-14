@@ -27,6 +27,18 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        .retake-btn {
+            background-color: #ff9800;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .retake-btn:hover {
+            background-color: #e68900;
+        }
     </style>
 </head>
 <body>
@@ -127,6 +139,9 @@
                 faceValidatedInput.value = "false";
                 loginBtn.disabled = true;
             }
+            
+            // Add retake button after validation is complete
+            addRetakeButton();
         }
 
         // Capture photo
@@ -175,10 +190,17 @@
 
         // Add retake button after photo is captured
         function addRetakeButton() {
+            // Check if retake button already exists
+            const existingRetakeBtn = document.getElementById('retake-btn');
+            if (existingRetakeBtn) {
+                existingRetakeBtn.remove();
+            }
+            
             const retakeBtn = document.createElement('button');
             retakeBtn.textContent = 'Retake Photo';
             retakeBtn.type = 'button';
-            retakeBtn.style.marginTop = '10px';
+            retakeBtn.id = 'retake-btn';
+            retakeBtn.className = 'retake-btn';
             retakeBtn.addEventListener('click', retakePhoto);
             photoPreview.appendChild(retakeBtn);
         }

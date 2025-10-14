@@ -52,6 +52,18 @@
         .form-right {
             flex: 1;
         }
+        .retake-btn {
+            background-color: #ff9800;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .retake-btn:hover {
+            background-color: #e68900;
+        }
     </style>
 </head>
 <body>
@@ -232,6 +244,9 @@
                 adminFaceValidatedInput.value = "false";
                 adminSubmitBtn.disabled = true;
             }
+            
+            // Add retake button after validation is complete
+            addAdminRetakeButton();
         }
 
         // Capture photo for admin
@@ -280,10 +295,17 @@
 
         // Add retake button after photo is captured
         function addAdminRetakeButton() {
+            // Check if retake button already exists
+            const existingRetakeBtn = document.getElementById('admin-retake-btn');
+            if (existingRetakeBtn) {
+                existingRetakeBtn.remove();
+            }
+            
             const retakeBtn = document.createElement('button');
             retakeBtn.textContent = 'Retake Photo';
             retakeBtn.type = 'button';
-            retakeBtn.style.marginTop = '10px';
+            retakeBtn.id = 'admin-retake-btn';
+            retakeBtn.className = 'retake-btn';
             retakeBtn.addEventListener('click', retakeAdminPhoto);
             adminPhotoPreview.appendChild(retakeBtn);
         }
