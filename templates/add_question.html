@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manage Questions</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-container {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-bottom: 30px;
+        }
+        input, textarea, button {
+            width: 100%;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            box-sizing: border-box; /* Important for 100% width */
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .delete-btn {
+            background-color: #dc3545;
+            padding: 5px 10px;
+            font-size: 14px;
+            width: auto; /* Override full width */
+        }
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+            word-wrap: break-word; /* Wrap long text */
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .success, .error {
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .success { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; }
+        .error { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; }
+        .nav-link {
+            float: right;
+            margin-top: -50px;
+            text-decoration: none;
+            color: #007BFF;
+            background-color: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 5px;
+        }
+        .nav-link:hover {
+            background-color: #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/selection" class="nav-link">Logout</a>
+        <h1>Manage Exam Questions</h1>
+
+        <div class="form-container">
+            <h2>Add New Question</h2>
+            <form id="questionForm">
+                <label for="question">Question:</label>
+                <textarea id="question" name="question" required></textarea>
+
+                <label for="options">Options (comma separated):</label>
+                <input type="text" id="options" name="options" placeholder="Option1, Option2, Option3, Option4" required>
+
+                <label for="answer">Correct Answer (use option index, e.g., 0, 1, 2, or 3):</label>
+                <input type="text" id="answer" name="answer" required>
+
+                <label for="time">Time (seconds):</label>
+                <input type="number" id="time" name="time" required>
+
+                <button type="submit">Add Question</button>
+            </form>
+            <p id="message"></p>
+        </div>
+
+        <h2>Existing Questions</h2>
+        <table id="questions-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Question Text</th>
+                    <th>Options</th>
+                    <th>Correct Answer</th>
+                    <th>Time (s)</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Questions will be loaded here by JavaScript -->
+            </tbody>
+        </table>
+        <p id="no-questions-message" style="display: none; text-align: center; color: #666;">No questions have been added yet.</p>
+    </div>
+
+    <script>
+        // Function to fetch and display questions
+        function loadQuestions() {
+            fetch('/api/questions')
+                .then(res => res.json())
+                .then(data => {
+                    const tableBody = document.querySelector('#questions-table tbody');
+                    const noQuestionsMsg = document.getElementById('no-questions-message');
+                    tableBody.innerHTML = ''; // Clear existing rows
+
+                    if (data.length === 0) {
+                        noQuestionsMsg.style.display = 'block';
+                        document.getElementById('questions-table').style.display = 'none';
+                    } else {
+                        noQuestionsMsg.style.display = 'none';
+                        document.getElementById('questions-table').style.display = 'table';
+                        data.forEach(q => {
+                            const row = `
+                                <tr>
+                                    <td>${q.ID}</td>
+                                    <td>${q.Text}</td>
+                                    <td>${q.Options.join(', ')}</td>
+                                    <td>${q.Answer}</td>
+                                    <td>${q.Time}</td>
+                                    <td>
+                                        <button class="delete-btn" onclick="deleteQuestion(${q.ID})">Delete</button>
+                                    </td>
+                                </tr>
+                            `;
+                            tableBody.innerHTML += row;
+                        });
+                    }
+                })
+                .catch(err => console.error('Error loading questions:', err));
+        }
+
+        // Function to delete a question
+        function deleteQuestion(id) {
+            if (!confirm('Are you sure you want to delete this question?')) {
+                return;
+            }
+
+            fetch('/delete-question', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `id=${id}`
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    loadQuestions(); // Reload the list
+                } else {
+                    alert('Failed to delete question.');
+                }
+            })
+            .catch(err => console.error('Error deleting question:', err));
+        }
+
+        // Handle form submission for adding a question
+        document.getElementById("questionForm").addEventListener("submit", function(e){
+            e.preventDefault();
+            let formData = new FormData(this);
+            fetch("/add-question", {
+                method: "POST",
+                body: formData
+            }).then(res => res.json())
+            .then(data => {
+                let msg = document.getElementById("message");
+                if(data.success){
+                    msg.className = "success";
+                    msg.innerText = data.message;
+                    document.getElementById("questionForm").reset();
+                    loadQuestions(); // Reload the list to show the new question
+                } else {
+                    msg.className = "error";
+                    msg.innerText = data.message;
+                }
+            });
+        });
+
+        // Load questions when the page is opened
+        document.addEventListener('DOMContentLoaded', loadQuestions);
+    </script>
+</body>
+</html>
